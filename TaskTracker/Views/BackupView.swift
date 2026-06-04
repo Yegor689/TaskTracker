@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BackupView: View {
     @Environment(BackupManager.self) private var backupManager
+    @Environment(\.dismiss) private var dismiss
     @State private var labelText = ""
     @State private var backupToRestore: Backup?
     @State private var showRestoreConfirm = false
@@ -17,12 +18,17 @@ struct BackupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Backups")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 4)
+            HStack {
+                Text("Backups")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 4)
 
             Text("A backup is a full snapshot of all projects. Restoring replaces all current data with that snapshot, but saves a “Before Restore” copy first so you can undo. Automatic backups keep the last 10 snapshots.")
                 .font(.caption)
