@@ -55,6 +55,9 @@ class Task {
     var isDone: Bool
     var priority: Int  // raw value of Priority: 0 = critical, 1 = normal, 2 = low
     var createdAt: Date
+    /// When the task was most recently marked done; nil while incomplete. Used to
+    /// order completed tasks (newest completion on top of the done group).
+    var completedAt: Date?
     var reminderDate: Date?
     var project: Project?
     @Relationship(inverse: \Task.subtasks) var parent: Task?
@@ -82,11 +85,43 @@ class Task {
     var plainTitle: String { Task.plain(from: titleRTF) }
     var plainDesc: String  { Task.plain(from: descRTF) }
 
+    /// Sets completion state and stamps `completedAt` so completed tasks can be
+    /// ordered by when they were finished. Always use this instead of mutating
+    /// `isDone` directly.
+    func setDone(_ done: Bool) {
+        guard done != isDone else { return }
+        isDone = done
+        completedAt = done ? Date() : nil
+    }
+
+    func toggleDone() { setDone(!isDone) }
+
     static func rtf(from plain: String, font: NSFont = .preferredFont(forTextStyle: .body)) -> Data {
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
         let attrStr = NSAttributedString(string: plain, attributes: attrs)
         return (try? attrStr.data(from: NSRange(location: 0, length: attrStr.length),
                                   documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])) ?? Data()
+    }
+
+    /// Returns a copy of the given title RTF with every font run resized to
+    /// `pointSize`, preserving family and traits (bold/italic). Used when a task
+    /// changes level (top-level title3 ↔ subtask body) so its baked-in font size
+    /// matches its siblings. Returns the input unchanged on failure.
+    static func resizingFontRTF(_ rtf: Data, to pointSize: CGFloat) -> Data {
+        guard !rtf.isEmpty,
+              let attr = try? NSAttributedString(data: rtf,
+                                                 options: [.documentType: NSAttributedString.DocumentType.rtf],
+                                                 documentAttributes: nil)
+        else { return rtf }
+        let mutable = NSMutableAttributedString(attributedString: attr)
+        let full = NSRange(location: 0, length: mutable.length)
+        mutable.enumerateAttribute(.font, in: full) { value, range, _ in
+            let base = (value as? NSFont) ?? .preferredFont(forTextStyle: .body)
+            let resized = NSFontManager.shared.convert(base, toSize: pointSize)
+            mutable.addAttribute(.font, value: resized, range: range)
+        }
+        return (try? mutable.data(from: NSRange(location: 0, length: mutable.length),
+                                  documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])) ?? rtf
     }
 
     static func plain(from rtf: Data) -> String {

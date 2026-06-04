@@ -54,6 +54,9 @@ final class TaskStore {
 
     func indentTask(_ task: Task, previousTask: Task?) {
         guard let parent = previousTask, let project = task.project else { return }
+        // Re-render the title at the subtask (body) font size so it doesn't stay
+        // at the larger top-level (title3) size it was created with.
+        task.titleRTF = Task.resizingFontRTF(task.titleRTF, to: NSFont.preferredFont(forTextStyle: .body).pointSize)
         task.parent = parent
         if !parent.subtasks.contains(where: { $0.id == task.id }) {
             parent.subtasks.append(task)
@@ -107,13 +110,14 @@ final class TaskStore {
     }
 
     func completeTask(_ task: Task) {
-        let wasParentDone = task.isDone
-        let wasReminder   = task.reminderDate
-        let subtaskStates = task.subtasks.map { ($0, $0.isDone, $0.reminderDate) }
-        task.isDone = true
+        let wasParentDone      = task.isDone
+        let wasParentCompleted = task.completedAt
+        let wasReminder        = task.reminderDate
+        let subtaskStates = task.subtasks.map { ($0, $0.isDone, $0.completedAt, $0.reminderDate) }
+        task.setDone(true)
         task.reminderDate = nil
         for subtask in task.subtasks {
-            subtask.isDone = true
+            subtask.setDone(true)
             subtask.reminderDate = nil
         }
 
@@ -124,10 +128,12 @@ final class TaskStore {
         undoManager?.registerUndo(withTarget: self) { store in
             store.undoManager?.setActionName("Complete Task")
             task.isDone = wasParentDone
+            task.completedAt = wasParentCompleted
             task.reminderDate = wasReminder
             if wasReminder != nil { store.reminderManager?.schedule(task: task) }
-            for (subtask, wasDone, wasSubReminder) in subtaskStates {
+            for (subtask, wasDone, wasCompleted, wasSubReminder) in subtaskStates {
                 subtask.isDone = wasDone
+                subtask.completedAt = wasCompleted
                 subtask.reminderDate = wasSubReminder
                 if wasSubReminder != nil { store.reminderManager?.schedule(task: subtask) }
             }
@@ -171,6 +177,8 @@ final class TaskStore {
     }
 
     fileprivate func unindentTask(_ task: Task, fromParent parent: Task, into project: Project) {
+        // Restore the larger top-level (title3) title font when promoting back up.
+        task.titleRTF = Task.resizingFontRTF(task.titleRTF, to: NSFont.preferredFont(forTextStyle: .title3).pointSize)
         task.parent = nil
         parent.subtasks.removeAll { $0.id == task.id }
         if !project.tasks.contains(where: { $0.id == task.id }) {

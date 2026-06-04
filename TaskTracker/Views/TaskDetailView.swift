@@ -41,7 +41,7 @@ struct TaskDetailView: View {
                 // MARK: Status chips
                 HStack(spacing: 12) {
                     Button {
-                        withAnimation(.spring(duration: 0.25)) { task.isDone.toggle() }
+                        withAnimation(.spring(duration: 0.25)) { task.toggleDone() }
                     } label: {
                         chip(
                             icon: task.isDone ? "checkmark.circle.fill" : "circle",
@@ -212,7 +212,7 @@ struct TaskDetailView: View {
         NavigationLink(value: subtask) {
             HStack(spacing: 12) {
                 Button {
-                    withAnimation(.spring(duration: 0.25)) { subtask.isDone.toggle() }
+                    withAnimation(.spring(duration: 0.25)) { subtask.toggleDone() }
                 } label: {
                     Image(systemName: subtask.isDone ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(subtask.isDone ? .green : .secondary)

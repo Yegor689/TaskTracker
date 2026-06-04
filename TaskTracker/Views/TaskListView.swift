@@ -50,10 +50,22 @@ struct TaskListView: View {
         case .active: filtered = searched.filter { !$0.isDone }
         case .done:   filtered = searched.filter {  $0.isDone }
         }
-        return filtered.sorted { lhs, rhs in
-            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
-            return lhs.createdAt < rhs.createdAt
+        return filtered.sorted(by: Self.taskOrder)
+    }
+
+    /// Ordering shared by the list: incomplete tasks first (by priority, then
+    /// creation), then completed tasks grouped at the bottom with the most
+    /// recently completed on top.
+    static func taskOrder(_ lhs: Task, _ rhs: Task) -> Bool {
+        if lhs.isDone != rhs.isDone { return !lhs.isDone }
+        if lhs.isDone {
+            // Both done: newest completion first (on top of the done group).
+            let l = lhs.completedAt ?? lhs.createdAt
+            let r = rhs.completedAt ?? rhs.createdAt
+            return l > r
         }
+        if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+        return lhs.createdAt < rhs.createdAt
     }
 
     var body: some View {
@@ -257,7 +269,7 @@ struct TaskRowView: View {
             ZStack(alignment: .trailing) {
                 HStack(alignment: .top, spacing: isSubtask ? 8 : 10) {
                     Button {
-                        withAnimation(.spring(duration: 0.25)) { task.isDone.toggle() }
+                        withAnimation(.spring(duration: 0.25)) { task.toggleDone() }
                     } label: {
                         Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(task.isDone ? .green : (task.priorityLevel.isAccented ? task.priorityLevel.color : .secondary))
@@ -530,7 +542,7 @@ struct TaskDetailRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Button {
-                withAnimation(.spring(duration: 0.25)) { task.isDone.toggle() }
+                withAnimation(.spring(duration: 0.25)) { task.toggleDone() }
             } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(task.isDone ? .green : (task.priorityLevel == .critical ? .red : .secondary))

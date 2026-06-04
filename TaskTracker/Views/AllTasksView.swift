@@ -32,12 +32,7 @@ struct AllTasksView: View {
         case .active: filtered = searched.filter { !$0.isDone }
         case .done:   filtered = searched.filter {  $0.isDone }
         }
-        return filtered.sorted { lhs, rhs in
-            // Completed tasks always sort to the end, regardless of priority.
-            if lhs.isDone != rhs.isDone { return !lhs.isDone }
-            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
-            return lhs.createdAt < rhs.createdAt
-        }
+        return filtered.sorted(by: TaskListView.taskOrder)
     }
 
     var groupedSections: [(header: String, tasks: [Task])] {
