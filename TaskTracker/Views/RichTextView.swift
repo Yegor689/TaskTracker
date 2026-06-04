@@ -18,7 +18,7 @@ struct RichTitleField: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> RichInlineTextView {
         let tv = RichInlineTextView()
         tv.delegate = context.coordinator
         tv.actions = context.coordinator.actions
@@ -48,28 +48,23 @@ struct RichTitleField: NSViewRepresentable {
         // the text view fills the scroll view's width and only grows vertically.
         // (AppKit's defaults for these differ between OS releases, which collapsed
         // the field to zero width on some Macs.)
+        // No NSScrollView wrapper: a scroll view has no intrinsic height and would
+        // swallow the text view's content height, clamping a wrapped title to one
+        // line. Returning the text view directly lets its intrinsicContentSize reach
+        // SwiftUI so the row grows to fit the wrapped lines.
         tv.minSize = NSSize(width: 0, height: 0)
         tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.isHorizontallyResizable = false
         tv.isVerticallyResizable = true
-        tv.autoresizingMask = [.width]
+        tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        tv.setContentCompressionResistancePriority(.required, for: .vertical)
         tv.textContainer?.widthTracksTextView = true
         tv.textContainer?.heightTracksTextView = false
         tv.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-
-        let scroll = NSScrollView()
-        scroll.documentView = tv
-        scroll.hasVerticalScroller = false
-        scroll.hasHorizontalScroller = false
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        scroll.autoresizingMask = [.width, .height]
-        return scroll
+        return tv
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let tv = scroll.documentView as? RichInlineTextView else { return }
-
+    func updateNSView(_ tv: RichInlineTextView, context: Context) {
         // Update the action box so RichInlineTextView always calls fresh closures
         context.coordinator.actions.onReturn        = onReturn
         context.coordinator.actions.onDeleteIfEmpty = onDeleteIfEmpty
@@ -89,6 +84,7 @@ struct RichTitleField: NSViewRepresentable {
                 context.coordinator.isUpdating = true
                 tv.textStorage?.setAttributedString(desired)
                 context.coordinator.isUpdating = false
+                tv.invalidateIntrinsicContentSize()
             }
         }
 
@@ -328,10 +324,24 @@ class RichInlineTextView: NSTextView {
         m.ensureLayout(for: c)
         // Width is governed entirely by SwiftUI's frame (maxWidth: .infinity); reporting
         // an intrinsic width here would let the field collapse to its content width on
-        // some macOS versions. Only the height is intrinsic.
+        // some macOS versions. Only the height is intrinsic — and it grows with wrapping.
         let f = font ?? NSFont.preferredFont(forTextStyle: .body)
         let height = max(m.usedRect(for: c).height, ceil(m.defaultLineHeight(for: f)))
         return NSSize(width: NSView.noIntrinsicMetric, height: height)
+    }
+
+    // When the view's width changes (resize, initial layout, or text set
+    // programmatically), the number of wrapped lines changes, so the intrinsic
+    // height must be recomputed. Without this, a long title stays clamped to the
+    // single-line height it had when first measured and the wrapped lines get clipped.
+    private var lastLayoutWidth: CGFloat = -1
+
+    override func layout() {
+        super.layout()
+        if abs(bounds.width - lastLayoutWidth) > 0.5 {
+            lastLayoutWidth = bounds.width
+            invalidateIntrinsicContentSize()
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
