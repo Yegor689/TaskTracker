@@ -162,7 +162,9 @@ struct TaskListView: View {
     }
 
     private func addTaskAfter(_ task: Task) {
-        let newTask = taskStore.addTask(priority: task.priority, to: project, after: task)
+        // New tasks always start at Normal priority — they don't inherit the
+        // priority of the task they were created after.
+        let newTask = taskStore.addTask(to: project, after: task)
         focus(newTask.id)
     }
 
