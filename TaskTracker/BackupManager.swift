@@ -1,8 +1,11 @@
 import Foundation
 
 enum BackupKind: String {
-    case auto   = "auto"
-    case manual = "manual"
+    case auto       = "auto"
+    case manual     = "manual"
+    /// A snapshot of the store taken automatically right before a restore, so a
+    /// destructive restore is always reversible. Never auto-pruned.
+    case preRestore = "prerestore"
 }
 
 struct Backup: Identifiable, Comparable {
@@ -22,6 +25,7 @@ final class BackupManager {
 
     private static let maxAutoBackups = 10
     private static let intervalDefaultsKey = "autoBackupIntervalHours"
+    private static let backupOnLaunchKey   = "backupOnLaunch"
 
     /// Selectable auto-backup intervals. `nil` rawValue (0) means disabled.
     static let intervalOptions = [0, 1, 6, 12, 24]
@@ -37,8 +41,15 @@ final class BackupManager {
         }
     }
 
-    var autoBackups:   [Backup] { backups.filter { $0.kind == .auto   } }
-    var manualBackups: [Backup] { backups.filter { $0.kind == .manual } }
+    /// When true, an auto-backup is taken every time the app launches,
+    /// independent of the interval timer. Persisted in UserDefaults.
+    var backupOnLaunch: Bool {
+        didSet { UserDefaults.standard.set(backupOnLaunch, forKey: Self.backupOnLaunchKey) }
+    }
+
+    var autoBackups:       [Backup] { backups.filter { $0.kind == .auto       } }
+    var manualBackups:     [Backup] { backups.filter { $0.kind == .manual     } }
+    var preRestoreBackups: [Backup] { backups.filter { $0.kind == .preRestore } }
 
     init(storeURL: URL) {
         self.storeURL = storeURL
@@ -50,14 +61,26 @@ final class BackupManager {
         } else {
             self.autoBackupIntervalHours = UserDefaults.standard.integer(forKey: Self.intervalDefaultsKey)
         }
+        // Default to backing up on launch on first run.
+        if UserDefaults.standard.object(forKey: Self.backupOnLaunchKey) == nil {
+            self.backupOnLaunch = true
+        } else {
+            self.backupOnLaunch = UserDefaults.standard.bool(forKey: Self.backupOnLaunchKey)
+        }
         try? FileManager.default.createDirectory(at: backupDir, withIntermediateDirectories: true)
         refresh()
     }
 
-    // Called on launch — backs up if enough time has elapsed since the last auto-backup,
-    // then arms the timer so backups keep running while the app stays open.
+    // Called on launch. If "back up on launch" is enabled, takes a backup now;
+    // otherwise backs up only if the interval has elapsed. Then arms the timer so
+    // interval backups keep running while the app stays open.
     func startAutoBackup() {
-        createAutoBackupIfDue()
+        if backupOnLaunch {
+            createBackup(kind: .auto)
+            pruneAutoBackups()
+        } else {
+            createAutoBackupIfDue()
+        }
         scheduleTimer()
     }
 
@@ -93,7 +116,10 @@ final class BackupManager {
             guard url.pathExtension == "store" else { return nil }
             let date = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
             let stem = url.deletingPathExtension().lastPathComponent
-            let kind: BackupKind = stem.hasPrefix("auto-") ? .auto : .manual
+            let kind: BackupKind
+            if stem.hasPrefix("prerestore-") { kind = .preRestore }
+            else if stem.hasPrefix("auto-")   { kind = .auto }
+            else                              { kind = .manual }
             return Backup(url: url, date: date, name: stem, kind: kind)
         }.sorted()
     }
@@ -106,7 +132,7 @@ final class BackupManager {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
         let timestamp = formatter.string(from: Date())
-        let prefix = kind == .auto ? "auto" : "manual"
+        let prefix = kind.rawValue
         let name = label.isEmpty ? "\(prefix)-\(timestamp)" : "\(prefix)-\(timestamp) \(label)"
         let dest = backupDir.appending(component: "\(name).store")
 
@@ -129,6 +155,15 @@ final class BackupManager {
 
     func restore(backup: Backup) throws {
         let fm = FileManager.default
+
+        // Restore replaces ALL current data with the snapshot. First take a
+        // pre-restore safety backup of the current store so the user can always
+        // undo a restore. It's a real saved backup (never auto-pruned), distinct
+        // from the transient staging copy below. Skip if restoring a pre-restore
+        // backup itself, to avoid stacking redundant safety copies on undo.
+        if fm.fileExists(atPath: storeURL.path) && backup.kind != .preRestore {
+            createBackup(label: "before restore", kind: .preRestore)
+        }
 
         // Stage the current store aside so a failed copy can't leave us with no
         // store at all. Only remove the staged copy once the restore succeeds.

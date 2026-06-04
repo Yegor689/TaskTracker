@@ -24,23 +24,31 @@ struct BackupView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 4)
 
-            Text("Automatic backups keep the last 10 snapshots. Restoring requires a relaunch.")
+            Text("A backup is a full snapshot of all projects. Restoring replaces all current data with that snapshot, but saves a “Before Restore” copy first so you can undo. Automatic backups keep the last 10 snapshots.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
 
-            HStack(spacing: 8) {
-                Text("Automatic backup")
-                    .font(.callout)
-                Spacer()
-                Picker("Automatic backup", selection: intervalBinding) {
-                    ForEach(BackupManager.intervalOptions, id: \.self) { hours in
-                        Text(intervalLabel(hours)).tag(hours)
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("Automatic backup")
+                        .font(.callout)
+                    Spacer()
+                    Picker("Automatic backup", selection: intervalBinding) {
+                        ForEach(BackupManager.intervalOptions, id: \.self) { hours in
+                            Text(intervalLabel(hours)).tag(hours)
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .fixedSize()
+
+                Toggle(isOn: backupOnLaunchBinding) {
+                    Text("Back up when opening the app")
+                        .font(.callout)
+                }
+                .toggleStyle(.switch)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
@@ -69,6 +77,19 @@ struct BackupView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    if !backupManager.preRestoreBackups.isEmpty {
+                        Section("Before Restore") {
+                            ForEach(backupManager.preRestoreBackups) { backup in
+                                BackupRow(backup: backup, formatter: Self.dateFormatter) {
+                                    backupToRestore = backup
+                                    showRestoreConfirm = true
+                                } onDelete: {
+                                    backupManager.delete(backup: backup)
+                                }
+                            }
+                        }
+                    }
+
                     if !backupManager.manualBackups.isEmpty {
                         Section("Manual") {
                             ForEach(backupManager.manualBackups) { backup in
@@ -98,7 +119,7 @@ struct BackupView: View {
                 .listStyle(.inset)
             }
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 460)
         .confirmationDialog(
             "Restore this backup?",
             isPresented: $showRestoreConfirm,
@@ -117,7 +138,7 @@ struct BackupView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let b = backupToRestore {
-                Text("This will replace all current data with the backup from \(Self.dateFormatter.string(from: b.date)). The app will relaunch.")
+                Text("This replaces ALL projects and tasks with the snapshot from \(Self.dateFormatter.string(from: b.date)) — it is not a per-project restore. Your current data is saved to a “Before Restore” backup first, so you can undo. The app will relaunch.")
             }
         }
         .alert("Restore Failed", isPresented: $showError) {
@@ -131,6 +152,13 @@ struct BackupView: View {
         Binding(
             get: { backupManager.autoBackupIntervalHours },
             set: { backupManager.autoBackupIntervalHours = $0 }
+        )
+    }
+
+    private var backupOnLaunchBinding: Binding<Bool> {
+        Binding(
+            get: { backupManager.backupOnLaunch },
+            set: { backupManager.backupOnLaunch = $0 }
         )
     }
 
@@ -186,7 +214,7 @@ private struct BackupRow: View {
     private var displayName: String {
         // Strip "manual-" / "auto-" prefix and timestamp, show just the label if present
         let withoutKind = backup.name
-            .replacingOccurrences(of: "^(auto|manual)-", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^(auto|manual|prerestore)-", with: "", options: .regularExpression)
         // withoutKind is now "yyyy-MM-dd HH-mm-ss optional label"
         let parts = withoutKind.split(separator: " ", maxSplits: 2)
         if parts.count > 2 {
