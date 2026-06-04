@@ -24,11 +24,26 @@ struct BackupView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 4)
 
-            Text("Auto-backups run once per day (last 10 kept). Restoring requires a relaunch.")
+            Text("Automatic backups keep the last 10 snapshots. Restoring requires a relaunch.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
+
+            HStack(spacing: 8) {
+                Text("Automatic backup")
+                    .font(.callout)
+                Spacer()
+                Picker("Automatic backup", selection: intervalBinding) {
+                    ForEach(BackupManager.intervalOptions, id: \.self) { hours in
+                        Text(intervalLabel(hours)).tag(hours)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
 
             Divider()
 
@@ -109,6 +124,22 @@ struct BackupView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    private var intervalBinding: Binding<Int> {
+        Binding(
+            get: { backupManager.autoBackupIntervalHours },
+            set: { backupManager.autoBackupIntervalHours = $0 }
+        )
+    }
+
+    private func intervalLabel(_ hours: Int) -> String {
+        switch hours {
+        case 0:  return "Off"
+        case 1:  return "Every hour"
+        case 24: return "Daily"
+        default: return "Every \(hours) hours"
         }
     }
 

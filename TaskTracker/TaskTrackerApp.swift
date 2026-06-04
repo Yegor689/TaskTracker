@@ -30,7 +30,7 @@ struct TaskTrackerApp: App {
         taskStore       = TaskStore(context: container.mainContext)
         backupManager   = BackupManager(storeURL: storeURL)
         reminderManager = ReminderManager()
-        backupManager.createAutoBackupIfNeeded()
+        backupManager.startAutoBackup()
     }
 
     var body: some Scene {

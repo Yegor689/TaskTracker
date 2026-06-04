@@ -21,8 +21,21 @@ final class BackupManager {
     private let backupDir: URL
 
     private static let maxAutoBackups = 10
+    private static let intervalDefaultsKey = "autoBackupIntervalHours"
+
+    /// Selectable auto-backup intervals. `nil` rawValue (0) means disabled.
+    static let intervalOptions = [0, 1, 6, 12, 24]
 
     private(set) var backups: [Backup] = []
+    private var timer: Timer?
+
+    /// How often to auto-back-up, in hours. 0 = off. Persisted in UserDefaults.
+    var autoBackupIntervalHours: Int {
+        didSet {
+            UserDefaults.standard.set(autoBackupIntervalHours, forKey: Self.intervalDefaultsKey)
+            scheduleTimer()
+        }
+    }
 
     var autoBackups:   [Backup] { backups.filter { $0.kind == .auto   } }
     var manualBackups: [Backup] { backups.filter { $0.kind == .manual } }
@@ -31,16 +44,46 @@ final class BackupManager {
         self.storeURL = storeURL
         self.backupDir = URL.applicationSupportDirectory
             .appending(component: "TaskTrackerBackups", directoryHint: .isDirectory)
+        // Default to daily (24h) on first run if nothing stored yet.
+        if UserDefaults.standard.object(forKey: Self.intervalDefaultsKey) == nil {
+            self.autoBackupIntervalHours = 24
+        } else {
+            self.autoBackupIntervalHours = UserDefaults.standard.integer(forKey: Self.intervalDefaultsKey)
+        }
         try? FileManager.default.createDirectory(at: backupDir, withIntermediateDirectories: true)
         refresh()
     }
 
-    // Called once on launch — skips if already backed up today.
-    func createAutoBackupIfNeeded() {
-        let calendar = Calendar.current
-        if let latest = autoBackups.first, calendar.isDateInToday(latest.date) { return }
+    // Called on launch — backs up if enough time has elapsed since the last auto-backup,
+    // then arms the timer so backups keep running while the app stays open.
+    func startAutoBackup() {
+        createAutoBackupIfDue()
+        scheduleTimer()
+    }
+
+    /// Creates an auto-backup if the configured interval has elapsed since the last one.
+    private func createAutoBackupIfDue() {
+        guard autoBackupIntervalHours > 0 else { return }
+        let interval = TimeInterval(autoBackupIntervalHours) * 3600
+        if let latest = autoBackups.first, Date().timeIntervalSince(latest.date) < interval { return }
         createBackup(kind: .auto)
         pruneAutoBackups()
+    }
+
+    private func scheduleTimer() {
+        timer?.invalidate()
+        timer = nil
+        guard autoBackupIntervalHours > 0 else { return }
+        let interval = TimeInterval(autoBackupIntervalHours) * 3600
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.createBackup(kind: .auto)
+            self.pruneAutoBackups()
+        }
+        // Tolerance lets the OS batch the timer for power efficiency; exact timing isn't critical.
+        t.tolerance = interval * 0.1
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     func refresh() {
