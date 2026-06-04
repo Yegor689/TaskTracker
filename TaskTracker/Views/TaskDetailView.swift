@@ -3,7 +3,9 @@ import SwiftData
 
 struct TaskDetailView: View {
     @Environment(TaskStore.self) private var taskStore
+    @Environment(ReminderManager.self) private var reminderManager
     @Bindable var task: Task
+    @State private var showReminderPopover = false
 
     private var doneCount: Int  { task.subtasks.filter(\.isDone).count }
     private var totalCount: Int { task.subtasks.count }
@@ -64,6 +66,21 @@ struct TaskDetailView: View {
                     }
                     .buttonStyle(.plain)
 
+                    Button { showReminderPopover = true } label: {
+                        chip(
+                            icon: task.reminderDate != nil ? "bell.fill" : "bell",
+                            text: task.reminderDate.map {
+                                $0.formatted(date: .abbreviated, time: .shortened)
+                            } ?? "Remind me",
+                            tint: .accentColor,
+                            filled: task.reminderDate != nil
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showReminderPopover, arrowEdge: .bottom) {
+                        ReminderPopover(task: task, reminderManager: reminderManager)
+                    }
+
                     Spacer()
 
                     Label(task.createdAt.formatted(date: .abbreviated, time: .omitted),
@@ -94,8 +111,8 @@ struct TaskDetailView: View {
                     .buttonStyle(.plain)
                 }
 
-                // MARK: Subtasks
-                VStack(alignment: .leading, spacing: 0) {
+                // MARK: Subtasks (root tasks only — subtasks can't have their own subtasks)
+                if task.parent == nil { VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Subtasks")
                             .font(.headline)
@@ -144,7 +161,7 @@ struct TaskDetailView: View {
                 }
                 .padding(20)
                 .background(cardBackground)
-            }
+                } }
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 28)

@@ -1,0 +1,143 @@
+import Foundation
+import UserNotifications
+import OSLog
+
+private let log = Logger(subsystem: "co.TaskTracker", category: "ReminderManager")
+
+@Observable
+final class ReminderManager: NSObject, UNUserNotificationCenterDelegate {
+    static let markDoneActionID   = "MARK_DONE"
+    static let categoryID         = "TASK_REMINDER"
+    static let taskIDKey          = "taskID"
+
+    private(set) var authorized = false
+
+    override init() {
+        super.init()
+        UNUserNotificationCenter.current().delegate = self
+        registerCategory()
+        refreshAuthStatus()
+    }
+
+    // MARK: - Permission
+
+    func requestPermissionIfNeeded() async {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        switch status {
+        case .notDetermined:
+            do {
+                authorized = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            } catch {
+                log.info("[ReminderManager] requestAuthorization error: \(error)")
+            }
+        case .authorized, .provisional, .ephemeral:
+            authorized = true
+        case .denied:
+            authorized = false
+            log.info("[ReminderManager] status=denied — open System Settings > Notifications > TaskTracker to re-enable")
+        @unknown default:
+            refreshAuthStatus()
+        }
+    }
+
+    private func refreshAuthStatus() {
+        _Concurrency.Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let status = settings.authorizationStatus
+            log.info("[ReminderManager] startup authorizationStatus=\(status.rawValue) (0=notDetermined,1=denied,2=authorized)")
+            let statusStr: String
+            switch status {
+            case .notDetermined: statusStr = "notDetermined"
+            case .denied:        statusStr = "denied"
+            case .authorized:    statusStr = "authorized"
+            case .provisional:   statusStr = "provisional"
+            case .ephemeral:     statusStr = "ephemeral"
+            @unknown default:    statusStr = "unknown(\(status.rawValue))"
+            }
+            log.info("[ReminderManager] startup authorizationStatus=\(statusStr, privacy: .public)")
+            await MainActor.run { authorized = status == .authorized }
+        }
+    }
+
+    private func registerCategory() {
+        let markDone = UNNotificationAction(
+            identifier: Self.markDoneActionID,
+            title: "Mark Done",
+            options: [.foreground]
+        )
+        let category = UNNotificationCategory(
+            identifier: Self.categoryID,
+            actions: [markDone],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    // MARK: - Schedule / Cancel
+
+    func schedule(task: Task) {
+        guard let date = task.reminderDate, date > Date() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = task.plainTitle.isEmpty ? "Task Reminder" : task.plainTitle
+        content.body  = task.plainDesc.isEmpty  ? "" : task.plainDesc
+        content.sound = .default
+        content.categoryIdentifier = Self.categoryID
+        content.userInfo = [Self.taskIDKey: task.id.uuidString]
+
+        // Fire at the exact chosen instant. A time-interval trigger avoids the
+        // minute-truncation pitfall of UNCalendarNotificationTrigger, where a
+        // reminder set within the current minute wouldn't fire until that minute recurs.
+        let interval = date.timeIntervalSinceNow
+        guard interval > 0 else { return }
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+        let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { log.error("[ReminderManager] schedule failed: \(error.localizedDescription, privacy: .public)") }
+            else { log.info("[ReminderManager] scheduled reminder for \(date, privacy: .public)") }
+        }
+    }
+
+    func cancel(taskID: UUID) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [taskID.uuidString])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [taskID.uuidString])
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    // Bring app to front when notification is tapped
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                 didReceive response: UNNotificationResponse,
+                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        if response.actionIdentifier == Self.markDoneActionID,
+           let idStr = userInfo[Self.taskIDKey] as? String {
+            NotificationCenter.default.post(name: .markTaskDone, object: idStr)
+        }
+        completionHandler()
+    }
+
+    // Show notification even when app is in foreground
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                 willPresent notification: UNNotification,
+                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // The reminder has now fired; clear it so the UI doesn't keep showing a past date,
+        // and surface an in-app toast carrying the task title.
+        if let idStr = notification.request.content.userInfo[Self.taskIDKey] as? String {
+            NotificationCenter.default.post(
+                name: .reminderFired,
+                object: idStr,
+                userInfo: ["title": notification.request.content.title]
+            )
+        }
+        completionHandler([.banner, .sound])
+    }
+}
+
+extension Notification.Name {
+    static let markTaskDone   = Notification.Name("markTaskDone")
+    static let reminderFired  = Notification.Name("reminderFired")
+}

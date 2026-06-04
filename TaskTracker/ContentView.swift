@@ -35,6 +35,7 @@ struct ContentView: View {
             }
         }
         .toolbarBackground(.visible, for: .windowToolbar)
+        .reminderToast()
         .sheet(isPresented: $showBackup) {
             BackupView()
                 .environment(backupManager)

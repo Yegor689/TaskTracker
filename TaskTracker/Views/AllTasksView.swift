@@ -8,6 +8,7 @@ enum TaskGrouping: String, CaseIterable {
 
 struct AllTasksView: View {
     @Environment(TaskStore.self) private var taskStore
+    @Environment(ReminderManager.self) private var reminderManager
     @Environment(\.undoManager) private var undoManager
     @Query(sort: \Project.title) private var projects: [Project]
     @Binding var selection: SidebarSelection?
@@ -155,7 +156,10 @@ struct AllTasksView: View {
                 }
             }
         }
-        .onAppear { taskStore.undoManager = undoManager }
+        .onAppear {
+            taskStore.undoManager = undoManager
+            taskStore.reminderManager = reminderManager
+        }
         .onChange(of: undoManager) { taskStore.undoManager = undoManager }
         .alert("Delete Task?", isPresented: Binding(
             get: { taskPendingDelete != nil },

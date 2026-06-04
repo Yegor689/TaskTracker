@@ -13,6 +13,7 @@ enum TaskFilter: String, CaseIterable {
 
 struct TaskListView: View {
     @Environment(TaskStore.self) private var taskStore
+    @Environment(ReminderManager.self) private var reminderManager
     @Environment(\.undoManager) private var undoManager
     var project: Project
     @Binding var selection: SidebarSelection?
@@ -147,7 +148,10 @@ struct TaskListView: View {
             path = NavigationPath()
             focusedTaskID = nil
         }
-        .onAppear { taskStore.undoManager = undoManager }
+        .onAppear {
+            taskStore.undoManager = undoManager
+            taskStore.reminderManager = reminderManager
+        }
         .onChange(of: undoManager) { taskStore.undoManager = undoManager }
     }
 
@@ -224,7 +228,9 @@ struct TaskRowView: View {
     var onNavigateDownFrom: (Task) -> Void
     var navigate:           (Task) -> Void
 
+    @Environment(ReminderManager.self) private var reminderManager
     @State private var isHovered = false
+    @State private var showReminderPopover = false
 
     private var isFocused: Bool { focusedID == task.id }
     private var subtaskFocused: Bool { sortedSubtasks.contains { $0.id == focusedID } }
@@ -284,12 +290,12 @@ struct TaskRowView: View {
                         }
                     }
 
-                    if isHovered || anyFocused {
+                    if isHovered || anyFocused || showReminderPopover {
                         Spacer(minLength: 40)
                     }
                 }
 
-                if isHovered || anyFocused {
+                if isHovered || anyFocused || showReminderPopover {
                     HStack(spacing: 4) {
                         Button {
                             withAnimation(.spring(duration: 0.2)) { task.priority = task.priority == 0 ? 1 : 0 }
@@ -301,8 +307,20 @@ struct TaskRowView: View {
                         .buttonStyle(.plain)
                         .help(task.priority == 0 ? "Mark Normal" : "Mark Critical")
 
-                        Divider()
-                            .frame(height: infoSize)
+                        Divider().frame(height: infoSize)
+
+                        Button { showReminderPopover = true } label: {
+                            Image(systemName: task.reminderDate != nil ? "bell.fill" : "bell")
+                                .foregroundStyle(task.reminderDate != nil ? Color.accentColor : Color.secondary.opacity(0.4))
+                                .font(.system(size: infoSize))
+                        }
+                        .buttonStyle(.plain)
+                        .help(task.reminderDate != nil ? "Edit Reminder" : "Set Reminder")
+                        .popover(isPresented: $showReminderPopover, arrowEdge: .bottom) {
+                            ReminderPopover(task: task, reminderManager: reminderManager)
+                        }
+
+                        Divider().frame(height: infoSize)
 
                         Button { navigate(task) } label: {
                             Image(systemName: "info.circle")

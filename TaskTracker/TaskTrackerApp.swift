@@ -7,6 +7,7 @@ struct TaskTrackerApp: App {
     let projectStore: ProjectStore
     let taskStore: TaskStore
     let backupManager: BackupManager
+    let reminderManager: ReminderManager
 
     init() {
         let schema = Schema([Project.self, Task.self])
@@ -25,9 +26,10 @@ struct TaskTrackerApp: App {
             }
         }
 
-        projectStore  = ProjectStore(context: container.mainContext)
-        taskStore     = TaskStore(context: container.mainContext)
-        backupManager = BackupManager(storeURL: storeURL)
+        projectStore    = ProjectStore(context: container.mainContext)
+        taskStore       = TaskStore(context: container.mainContext)
+        backupManager   = BackupManager(storeURL: storeURL)
+        reminderManager = ReminderManager()
         backupManager.createAutoBackupIfNeeded()
     }
 
@@ -37,9 +39,47 @@ struct TaskTrackerApp: App {
                 .environment(projectStore)
                 .environment(taskStore)
                 .environment(backupManager)
+                .environment(reminderManager)
                 .frame(minWidth: 720, minHeight: 480)
+                .onAppear { clearExpiredReminders() }
+                .onReceive(NotificationCenter.default.publisher(for: .markTaskDone)) { note in
+                    guard let idStr = note.object as? String,
+                          let uuid  = UUID(uuidString: idStr) else { return }
+                    // Find the task by ID and mark it done through the store so it's undoable.
+                    let descriptor = FetchDescriptor<Task>(
+                        predicate: #Predicate { $0.id == uuid }
+                    )
+                    if let task = try? container.mainContext.fetch(descriptor).first {
+                        taskStore.completeTask(task)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .reminderFired)) { note in
+                    guard let idStr = note.object as? String,
+                          let uuid  = UUID(uuidString: idStr) else { return }
+                    // The reminder fired; clear its date so the UI stops showing it.
+                    let descriptor = FetchDescriptor<Task>(
+                        predicate: #Predicate { $0.id == uuid }
+                    )
+                    if let task = try? container.mainContext.fetch(descriptor).first {
+                        task.reminderDate = nil
+                    }
+                }
         }
         .defaultSize(width: 960, height: 620)
         .modelContainer(container)
+    }
+
+    /// Clears reminders whose time has already passed (e.g. fired or were missed while the app was closed)
+    /// so the UI never shows a stale past reminder.
+    private func clearExpiredReminders() {
+        let now = Date()
+        let descriptor = FetchDescriptor<Task>(
+            predicate: #Predicate { $0.reminderDate != nil && $0.reminderDate! < now }
+        )
+        guard let expired = try? container.mainContext.fetch(descriptor) else { return }
+        for task in expired {
+            task.reminderDate = nil
+            reminderManager.cancel(taskID: task.id)
+        }
     }
 }

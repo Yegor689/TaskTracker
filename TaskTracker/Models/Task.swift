@@ -10,6 +10,7 @@ class Task {
     var isDone: Bool
     var priority: Int  // 0 = critical, 1 = normal
     var createdAt: Date
+    var reminderDate: Date?
     var project: Project?
     @Relationship(inverse: \Task.subtasks) var parent: Task?
     @Relationship(deleteRule: .cascade) var subtasks: [Task]

@@ -25,6 +25,7 @@ private struct TaskSnapshot {
 final class TaskStore {
     private let context: ModelContext
     var undoManager: UndoManager?
+    var reminderManager: ReminderManager?
 
     init(context: ModelContext) {
         self.context = context
@@ -107,14 +108,29 @@ final class TaskStore {
 
     func completeTask(_ task: Task) {
         let wasParentDone = task.isDone
-        let subtaskStates = task.subtasks.map { ($0, $0.isDone) }
+        let wasReminder   = task.reminderDate
+        let subtaskStates = task.subtasks.map { ($0, $0.isDone, $0.reminderDate) }
         task.isDone = true
-        for subtask in task.subtasks { subtask.isDone = true }
+        task.reminderDate = nil
+        for subtask in task.subtasks {
+            subtask.isDone = true
+            subtask.reminderDate = nil
+        }
+
+        // Cancel reminders for completed tasks
+        reminderManager?.cancel(taskID: task.id)
+        for subtask in task.subtasks { reminderManager?.cancel(taskID: subtask.id) }
 
         undoManager?.registerUndo(withTarget: self) { store in
             store.undoManager?.setActionName("Complete Task")
             task.isDone = wasParentDone
-            for (subtask, wasDone) in subtaskStates { subtask.isDone = wasDone }
+            task.reminderDate = wasReminder
+            if wasReminder != nil { store.reminderManager?.schedule(task: task) }
+            for (subtask, wasDone, wasSubReminder) in subtaskStates {
+                subtask.isDone = wasDone
+                subtask.reminderDate = wasSubReminder
+                if wasSubReminder != nil { store.reminderManager?.schedule(task: subtask) }
+            }
         }
         undoManager?.setActionName("Complete Task")
     }
@@ -129,6 +145,10 @@ final class TaskStore {
         let createdAt  = task.createdAt
         let afterIndex = project.tasks.firstIndex(where: { $0.id == task.id }).map { $0 - 1 }
         let afterTask  = afterIndex.flatMap { $0 >= 0 ? project.tasks[$0] : nil }
+
+        // Cancel reminders before deleting
+        reminderManager?.cancel(taskID: task.id)
+        for subtask in task.subtasks { reminderManager?.cancel(taskID: subtask.id) }
 
         task.parent?.subtasks.removeAll { $0.id == task.id }
         project.tasks.removeAll { $0.id == task.id }
