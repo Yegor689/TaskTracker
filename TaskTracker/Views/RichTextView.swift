@@ -44,12 +44,26 @@ struct RichTitleField: NSViewRepresentable {
         tv.coordinator = context.coordinator
         context.coordinator.textView = tv
 
+        // Make width tracking explicit so layout is identical across macOS versions:
+        // the text view fills the scroll view's width and only grows vertically.
+        // (AppKit's defaults for these differ between OS releases, which collapsed
+        // the field to zero width on some Macs.)
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isHorizontallyResizable = false
+        tv.isVerticallyResizable = true
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.heightTracksTextView = false
+        tv.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+
         let scroll = NSScrollView()
         scroll.documentView = tv
         scroll.hasVerticalScroller = false
         scroll.hasHorizontalScroller = false
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
+        scroll.autoresizingMask = [.width, .height]
         return scroll
     }
 
@@ -109,6 +123,7 @@ struct RichTitleField: NSViewRepresentable {
             guard !isUpdating, let tv = notification.object as? NSTextView else { return }
             applyMarkdownShortcuts(tv)
             tv.checkTextInDocument(nil)
+            tv.invalidateIntrinsicContentSize()
             save(tv)
         }
 
@@ -311,7 +326,12 @@ class RichInlineTextView: NSTextView {
     override var intrinsicContentSize: NSSize {
         guard let c = textContainer, let m = layoutManager else { return super.intrinsicContentSize }
         m.ensureLayout(for: c)
-        return m.usedRect(for: c).size
+        // Width is governed entirely by SwiftUI's frame (maxWidth: .infinity); reporting
+        // an intrinsic width here would let the field collapse to its content width on
+        // some macOS versions. Only the height is intrinsic.
+        let f = font ?? NSFont.preferredFont(forTextStyle: .body)
+        let height = max(m.usedRect(for: c).height, ceil(m.defaultLineHeight(for: f)))
+        return NSSize(width: NSView.noIntrinsicMetric, height: height)
     }
 
     override func mouseDown(with event: NSEvent) {
