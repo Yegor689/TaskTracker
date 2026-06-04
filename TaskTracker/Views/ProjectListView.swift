@@ -8,8 +8,10 @@ struct ProjectListView: View {
     @Binding var selection: SidebarSelection?
     @State private var isAddingProject = false
     @State private var newProjectTitle = ""
+    @State private var newProjectDesc = ""
     @State private var projectToRename: Project?
     @State private var renameTitle = ""
+    @State private var renameDesc = ""
     @State private var projectToDelete: Project?
 
     var body: some View {
@@ -35,6 +37,7 @@ struct ProjectListView: View {
                         .contextMenu {
                             Button("Rename") {
                                 renameTitle = project.title
+                                renameDesc = project.desc
                                 projectToRename = project
                             }
                             Divider()
@@ -87,14 +90,15 @@ struct ProjectListView: View {
             Text("All tasks in this project will also be deleted. This cannot be undone.")
         }
         .sheet(isPresented: $isAddingProject) {
-            ProjectFormSheet(heading: "New Project", value: $newProjectTitle) {
-                projectStore.createProject(title: newProjectTitle)
+            ProjectFormSheet(heading: "New Project", title: $newProjectTitle, desc: $newProjectDesc) {
+                projectStore.createProject(title: newProjectTitle, desc: newProjectDesc)
                 newProjectTitle = ""
+                newProjectDesc = ""
             }
         }
         .sheet(item: $projectToRename) { project in
-            ProjectFormSheet(heading: "Rename Project", value: $renameTitle) {
-                projectStore.updateProject(project, title: renameTitle)
+            ProjectFormSheet(heading: "Rename Project", title: $renameTitle, desc: $renameDesc) {
+                projectStore.updateProject(project, title: renameTitle, desc: renameDesc)
             }
         }
     }
@@ -173,35 +177,41 @@ private struct ProjectRowView: View {
 
 private struct ProjectFormSheet: View {
     let heading: String
-    @Binding var value: String
+    @Binding var title: String
+    @Binding var desc: String
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var isFocused: Bool
+    @FocusState private var titleFocused: Bool
 
     var body: some View {
         VStack(spacing: 16) {
             Text(heading).font(.headline)
-            TextField("Title", text: $value)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(submit)
-                .focused($isFocused)
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("Title", text: $title)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(submit)
+                    .focused($titleFocused)
+                TextField("Description (optional)", text: $desc)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(submit)
+            }
             HStack {
                 Button("Cancel") { dismiss() }
                 Spacer()
                 Button("Save", action: submit)
                     .buttonStyle(.borderedProminent)
-                    .disabled(value.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding()
         .frame(width: 300)
-        .onAppear { isFocused = true }
+        .onAppear { titleFocused = true }
     }
 
     private func submit() {
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        value = trimmed
+        title = trimmed
         onConfirm()
         dismiss()
     }
