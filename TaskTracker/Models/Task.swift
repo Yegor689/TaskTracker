@@ -1,6 +1,51 @@
 import Foundation
 import SwiftData
 import AppKit
+import SwiftUI
+
+/// Task priority. Stored as the raw `Int` on `Task.priority` so existing data
+/// (0 = critical, 1 = normal) stays valid; 2 = low is the new level.
+/// The rawValue doubles as the sort order (lower = more urgent, sorts first).
+enum Priority: Int, CaseIterable, Identifiable {
+    case critical = 0
+    case normal   = 1
+    case low      = 2
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .critical: return "Critical"
+        case .normal:   return "Normal"
+        case .low:      return "Low"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .critical: return .red
+        case .normal:   return .secondary
+        case .low:      return .blue
+        }
+    }
+
+    /// SF Symbol shown on the inline priority button / detail chip.
+    var iconName: String {
+        switch self {
+        case .critical: return "exclamationmark.circle.fill"
+        case .normal:   return "flag"
+        case .low:      return "arrow.down.circle"
+        }
+    }
+
+    /// Whether this level warrants a visual accent (color, bold, leading bar).
+    var isAccented: Bool { self != .normal }
+
+    /// The next level when cycling via the inline button: Critical → Normal → Low → Critical.
+    var next: Priority {
+        Priority(rawValue: (rawValue + 1) % Priority.allCases.count) ?? .normal
+    }
+}
 
 @Model
 class Task {
@@ -8,7 +53,7 @@ class Task {
     var titleRTF: Data
     var descRTF: Data
     var isDone: Bool
-    var priority: Int  // 0 = critical, 1 = normal
+    var priority: Int  // raw value of Priority: 0 = critical, 1 = normal, 2 = low
     var createdAt: Date
     var reminderDate: Date?
     var project: Project?
@@ -25,6 +70,13 @@ class Task {
         self.project = project
         self.parent = parent
         self.subtasks = []
+    }
+
+    /// Typed view over the stored `priority` Int. Falls back to `.normal` for any
+    /// unexpected stored value so the UI never breaks on bad data.
+    var priorityLevel: Priority {
+        get { Priority(rawValue: priority) ?? .normal }
+        set { priority = newValue.rawValue }
     }
 
     var plainTitle: String { Task.plain(from: titleRTF) }

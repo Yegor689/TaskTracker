@@ -258,7 +258,7 @@ struct TaskRowView: View {
                         withAnimation(.spring(duration: 0.25)) { task.isDone.toggle() }
                     } label: {
                         Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(task.isDone ? .green : (task.priority == 0 ? .red : .secondary))
+                            .foregroundStyle(task.isDone ? .green : (task.priorityLevel.isAccented ? task.priorityLevel.color : .secondary))
                             .font(.system(size: iconSize))
                     }
                     .buttonStyle(.plain)
@@ -278,7 +278,7 @@ struct TaskRowView: View {
                             onNavigateUp:    onNavigateUp,
                             onNavigateDown:  onNavigateDown
                         )
-                        .frame(height: lineHeight)
+                        .frame(maxWidth: .infinity, minHeight: lineHeight, alignment: .leading)
 
                         if !task.plainDesc.isEmpty {
                             Text(task.plainDesc)
@@ -297,15 +297,23 @@ struct TaskRowView: View {
 
                 if isHovered || anyFocused || showReminderPopover {
                     HStack(spacing: 4) {
-                        Button {
-                            withAnimation(.spring(duration: 0.2)) { task.priority = task.priority == 0 ? 1 : 0 }
+                        Menu {
+                            ForEach(Priority.allCases) { level in
+                                Button {
+                                    withAnimation(.spring(duration: 0.2)) { task.priorityLevel = level }
+                                } label: {
+                                    Label(level.label, systemImage: task.priorityLevel == level ? "checkmark" : level.iconName)
+                                }
+                            }
                         } label: {
-                            Image(systemName: task.priority == 0 ? "exclamationmark.circle.fill" : "exclamationmark.circle")
-                                .foregroundStyle(task.priority == 0 ? Color.red : Color.secondary.opacity(0.4))
+                            Image(systemName: task.priorityLevel.iconName)
+                                .foregroundStyle(task.priorityLevel.isAccented ? task.priorityLevel.color : Color.secondary.opacity(0.4))
                                 .font(.system(size: infoSize))
                         }
-                        .buttonStyle(.plain)
-                        .help(task.priority == 0 ? "Mark Normal" : "Mark Critical")
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Priority: \(task.priorityLevel.label)")
 
                         Divider().frame(height: infoSize)
 
@@ -340,10 +348,10 @@ struct TaskRowView: View {
                     .fill(rowFill)
             )
             .overlay(alignment: .leading) {
-                // Accent bar marking critical, not-yet-done tasks.
-                if task.priority == 0 && !task.isDone {
+                // Accent bar marking non-normal, not-yet-done tasks, colored by level.
+                if task.priorityLevel.isAccented && !task.isDone {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.red)
+                        .fill(task.priorityLevel.color)
                         .frame(width: 3)
                         .padding(.vertical, isSubtask ? 4 : 5)
                 }
@@ -375,9 +383,10 @@ struct TaskRowView: View {
         .contextMenu {
             Button("Open Properties") { navigate(task) }
             Divider()
-            Picker("Priority", selection: $task.priority) {
-                Label("Critical", systemImage: "exclamationmark.circle.fill").tag(0)
-                Text("Normal").tag(1)
+            Picker("Priority", selection: $task.priorityLevel) {
+                ForEach(Priority.allCases) { level in
+                    Label(level.label, systemImage: level.iconName).tag(level)
+                }
             }
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
@@ -434,7 +443,7 @@ private struct TaskStatsFooter: View {
     private var allTasks: [Task]  { tasks + tasks.flatMap(\.subtasks) }
     private var total:    Int     { allTasks.count }
     private var done:     Int     { allTasks.filter(\.isDone).count }
-    private var critical: Int     { allTasks.filter { $0.priority == 0 && !$0.isDone }.count }
+    private var critical: Int     { allTasks.filter { $0.priorityLevel == .critical && !$0.isDone }.count }
 
     private var fraction: Double { total > 0 ? Double(done) / Double(total) : 0 }
 
@@ -522,7 +531,7 @@ struct TaskDetailRowView: View {
                 withAnimation(.spring(duration: 0.25)) { task.isDone.toggle() }
             } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(task.isDone ? .green : (task.priority == 0 ? .red : .secondary))
+                    .foregroundStyle(task.isDone ? .green : (task.priorityLevel == .critical ? .red : .secondary))
                     .imageScale(.large)
             }
             .buttonStyle(.plain)
@@ -532,10 +541,10 @@ struct TaskDetailRowView: View {
                     Text(task.plainTitle)
                         .strikethrough(task.isDone)
                         .foregroundStyle(task.isDone ? .secondary : .primary)
-                        .fontWeight(task.priority == 0 && !task.isDone ? .semibold : .regular)
-                    if task.priority == 0 && !task.isDone {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundStyle(.red)
+                        .fontWeight(task.priorityLevel == .critical && !task.isDone ? .semibold : .regular)
+                    if task.priorityLevel != .normal && !task.isDone {
+                        Image(systemName: task.priorityLevel.iconName)
+                            .foregroundStyle(task.priorityLevel.color)
                             .font(.caption)
                     }
                 }

@@ -54,14 +54,14 @@ struct TaskDetailView: View {
 
                     Button {
                         withAnimation(.spring(duration: 0.2)) {
-                            task.priority = task.priority == 0 ? 1 : 0
+                            task.priorityLevel = task.priorityLevel.next
                         }
                     } label: {
                         chip(
-                            icon: task.priority == 0 ? "exclamationmark.circle.fill" : "flag",
-                            text: task.priority == 0 ? "Critical" : "Normal",
-                            tint: task.priority == 0 ? .red : .secondary,
-                            filled: task.priority == 0
+                            icon: task.priorityLevel.iconName,
+                            text: task.priorityLevel.label,
+                            tint: task.priorityLevel.isAccented ? task.priorityLevel.color : .secondary,
+                            filled: task.priorityLevel.isAccented
                         )
                     }
                     .buttonStyle(.plain)

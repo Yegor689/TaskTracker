@@ -47,12 +47,11 @@ struct AllTasksView: View {
                 return (header: project.title, tasks: tasks)
             }
         case .priority:
-            let critical = allTasks.filter { $0.priority == 0 }
-            let normal   = allTasks.filter { $0.priority != 0 }
-            var sections: [(header: String, tasks: [Task])] = []
-            if !critical.isEmpty { sections.append((header: "Critical", tasks: critical)) }
-            if !normal.isEmpty   { sections.append((header: "Normal",   tasks: normal))   }
-            return sections
+            return Priority.allCases.compactMap { level in
+                let tasks = allTasks.filter { $0.priorityLevel == level }
+                guard !tasks.isEmpty else { return nil }
+                return (header: level.label, tasks: tasks)
+            }
         }
     }
 
@@ -63,10 +62,10 @@ struct AllTasksView: View {
                     ForEach(groupedSections, id: \.header) { section in
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
-                                if grouping == .priority {
-                                    Image(systemName: section.header == "Critical"
-                                          ? "exclamationmark.circle.fill" : "circle")
-                                        .foregroundStyle(section.header == "Critical" ? .red : .secondary)
+                                if grouping == .priority,
+                                   let level = Priority.allCases.first(where: { $0.label == section.header }) {
+                                    Image(systemName: level.isAccented ? level.iconName : "circle")
+                                        .foregroundStyle(level.isAccented ? level.color : .secondary)
                                         .font(.caption)
                                 }
                                 Text(section.header)
