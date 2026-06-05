@@ -41,26 +41,8 @@ struct TaskListView: View {
     @State private var searchText = ""
     @State private var taskPendingDelete: Task?
 
-    // Custom drag-to-reorder state.
-    @State private var draggingTaskID: UUID?
-    @State private var dragOffset: CGFloat = 0
-    // The dragged row's slot midpoint at the moment the drag began. The row tracks
-    // the cursor as anchorMidY + translation, independent of array reshuffling.
-    @State private var dragAnchorMidY: CGFloat = 0
-    // Measured vertical midpoint of each root row (in the list's coordinate space),
-    // so reorder decisions respect real row heights (tall rows with subtasks).
-    @State private var rowMidYs: [UUID: CGFloat] = [:]
-    // While dragging, the root task the dragged item would be nested under if
-    // released now (set when the user drags far enough to the right over a row).
-    @State private var nestTargetID: UUID?
-    // While dragging a subtask, set when dragged far enough left to promote it.
-    @State private var promoteTargetID: UUID?
-    private static let dragSpace = "taskListDragSpace"
-    // How far right you must drag to switch from "reorder" to "nest under".
-    private static let nestThreshold: CGFloat = 28
-    // Approx. one row height; used to extend the subtask reorder band so the first
-    // and last slots are reachable without wandering into another task.
-    private let rowApprox: CGFloat = 30
+    // Custom drag-to-reorder engine (state + logic live in TaskDragController).
+    @State private var drag = TaskDragController()
 
     // Flat ordered list: each root task followed by its visible subtasks.
     var flatTasks: [Task] {
@@ -74,6 +56,12 @@ struct TaskListView: View {
         project.tasks
             .filter { $0.parent == nil && $0.matchesSearch(searchText) && filter.matches($0) }
             .sorted(by: Self.taskOrder)
+    }
+
+    /// Dragging is only meaningful when the list shows its natural manual order
+    /// (no search, and not the Done-only filter where order is by completion).
+    private var dragEnabled: Bool {
+        searchText.isEmpty && (filter == .all || filter == .active)
     }
 
     /// Ordering shared by the list: incomplete tasks first in their manual
@@ -111,37 +99,39 @@ struct TaskListView: View {
                             onNavigateDown:     { navigateTo(task, direction: +1) },
                             onNavigateDownFrom: { navigateTo($0, direction: +1) },
                             navigate:           { t in path.append(t) },
-                            dragGesture:        dragGesture(for: task),
+                            dragGesture:        dragEnabled ? drag.rootGesture(for: task, roots: { filteredTasks }, store: taskStore, project: project) : nil,
                             dragContext:        DragContext(
-                                draggingTaskID: draggingTaskID,
-                                dragOffset: dragOffset,
-                                promoteTargetID: promoteTargetID,
-                                coordinateSpace: Self.dragSpace,
-                                subtaskGesture: { parent, sub in subtaskDragGesture(for: sub, parent: parent) }
+                                draggingTaskID: drag.draggingTaskID,
+                                dragOffset: drag.dragOffset,
+                                promoteTargetID: drag.promoteTargetID,
+                                coordinateSpace: TaskDragController.coordinateSpace,
+                                subtaskGesture: { parent, sub in
+                                    dragEnabled ? drag.subtaskGesture(for: sub, parent: parent, store: taskStore) : nil
+                                }
                             )
                         )
                         .overlay {
                             // Highlight the row the dragged task would nest under.
-                            if nestTargetID == task.id {
+                            if drag.nestTargetID == task.id {
                                 RoundedRectangle(cornerRadius: 6)
                                     .strokeBorder(Color.accentColor, lineWidth: 2)
                             }
                         }
                         .offset(
-                            x: (draggingTaskID == task.id && nestTargetID != nil) ? 20 : 0,
-                            y: draggingTaskID == task.id ? dragOffset : 0
+                            x: (drag.draggingTaskID == task.id && drag.nestTargetID != nil) ? 20 : 0,
+                            y: drag.draggingTaskID == task.id ? drag.dragOffset : 0
                         )
-                        .zIndex(draggingTaskID == task.id ? 1 : 0)
+                        .zIndex(drag.draggingTaskID == task.id ? 1 : 0)
                         // Non-dragged rows slide smoothly into new slots; the dragged
                         // row tracks the cursor without animation lag.
-                        .animation(draggingTaskID == task.id ? nil : .spring(duration: 0.25),
+                        .animation(drag.draggingTaskID == task.id ? nil : .spring(duration: 0.25),
                                    value: filteredTasks.map(\.id))
                         .onTapGesture(count: 2) { path.append(task) }
                         .background(
                             GeometryReader { geo in
                                 Color.clear.preference(
                                     key: RowMidYKey.self,
-                                    value: [task.id: geo.frame(in: .named(Self.dragSpace)).midY]
+                                    value: [task.id: geo.frame(in: .named(TaskDragController.coordinateSpace)).midY]
                                 )
                             }
                         )
@@ -154,8 +144,8 @@ struct TaskListView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
-                .coordinateSpace(name: Self.dragSpace)
-                .onPreferenceChange(RowMidYKey.self) { rowMidYs = $0 }
+                .coordinateSpace(name: TaskDragController.coordinateSpace)
+                .onPreferenceChange(RowMidYKey.self) { drag.rowMidYs = $0 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -228,142 +218,6 @@ struct TaskListView: View {
         focus(task.id)
     }
 
-    /// A drag gesture for the bullet handle of a root task. Live-reorders the list
-    /// as the dragged row's cursor crosses neighbouring rows' measured midpoints,
-    /// then commits on release. Using real midpoints (not a fixed row height) keeps
-    /// reordering correct across tall rows (parents with subtasks/descriptions).
-    private func dragGesture(for task: Task) -> AnyGesture<Void>? {
-        // Only incomplete root tasks are draggable, and only in the unfiltered list
-        // (reordering a filtered subset is ambiguous).
-        guard !task.isDone, filter == .all || filter == .active, searchText.isEmpty else { return nil }
-
-        let gesture = DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.dragSpace))
-            .onChanged { value in
-                if draggingTaskID != task.id {
-                    draggingTaskID = task.id
-                    // Anchor to this row's current slot so the row tracks the cursor
-                    // 1:1 regardless of how the array reshuffles underneath.
-                    dragAnchorMidY = rowMidYs[task.id] ?? value.location.y
-                }
-
-                // The row's desired screen midpoint = where it started + how far the
-                // cursor moved. Its visual offset is that minus its current slot mid.
-                let desiredMidY = dragAnchorMidY + value.translation.height
-                let currentSlotMid = rowMidYs[task.id] ?? desiredMidY
-                dragOffset = desiredMidY - currentSlotMid
-
-                let rows = filteredTasks
-                guard let from = rows.firstIndex(where: { $0.id == task.id }) else { return }
-
-                // Nest intent: dragged far enough right while hovering another root
-                // task that can accept children. The row directly under the cursor
-                // is the one whose vertical band contains desiredMidY.
-                if value.translation.width >= Self.nestThreshold,
-                   let hovered = rowUnder(desiredMidY, excluding: task.id),
-                   task.subtasks.isEmpty, hovered.parent == nil {
-                    nestTargetID = hovered.id
-                    return   // hold position; don't reorder while aiming to nest
-                }
-                nestTargetID = nil
-
-                // Reorder: move the dragged task to the slot whose midpoint the
-                // cursor has crossed, comparing against the OTHER rows' real mids.
-                var target = from
-                for (i, row) in rows.enumerated() where row.id != task.id {
-                    guard let mid = rowMidYs[row.id] else { continue }
-                    if i < from, desiredMidY < mid { target = min(target, i) }
-                    if i > from, desiredMidY > mid { target = max(target, i) }
-                }
-                if target != from {
-                    move(task, in: rows, to: target)
-                }
-            }
-            .onEnded { _ in
-                if let nestID = nestTargetID,
-                   let parent = filteredTasks.first(where: { $0.id == nestID }) {
-                    withAnimation(.spring(duration: 0.2)) {
-                        taskStore.nestTask(task, under: parent)
-                    }
-                }
-                withAnimation(.spring(duration: 0.2)) { dragOffset = 0 }
-                draggingTaskID = nil
-                nestTargetID = nil
-            }
-        return AnyGesture(gesture.map { _ in () })
-    }
-
-    /// Drag gesture for a subtask: reorder among its siblings, or drag left past a
-    /// threshold to promote it back to a root task.
-    private func subtaskDragGesture(for subtask: Task, parent: Task) -> AnyGesture<Void>? {
-        guard !subtask.isDone, filter == .all || filter == .active, searchText.isEmpty else { return nil }
-
-        let gesture = DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.dragSpace))
-            .onChanged { value in
-                if draggingTaskID != subtask.id {
-                    draggingTaskID = subtask.id
-                    dragAnchorMidY = rowMidYs[subtask.id] ?? value.location.y
-                }
-                let desiredMidY = dragAnchorMidY + value.translation.height
-                let currentSlotMid = rowMidYs[subtask.id] ?? desiredMidY
-                dragOffset = desiredMidY - currentSlotMid
-
-                // Promote intent: dragged far enough LEFT → becomes a root task.
-                if value.translation.width <= -Self.nestThreshold {
-                    promoteTargetID = subtask.id
-                    return
-                }
-                promoteTargetID = nil
-
-                // Live-reorder among siblings. Clamp the effective position into the
-                // sibling range so dragging above the first row targets the first
-                // slot and below the last targets the last — but don't run if the
-                // cursor has wandered far past the band (heading toward another task).
-                let sibs = parent.subtasks.sorted { $0.sortIndex < $1.sortIndex }
-                guard let from = sibs.firstIndex(where: { $0.id == subtask.id }) else { return }
-                let mids = sibs.compactMap { rowMidYs[$0.id] }
-                if let lo = mids.min(), let hi = mids.max(),
-                   desiredMidY >= lo - rowApprox, desiredMidY <= hi + rowApprox {
-                    var target = from
-                    for (i, s) in sibs.enumerated() where s.id != subtask.id {
-                        guard let mid = rowMidYs[s.id] else { continue }
-                        if i < from, desiredMidY < mid { target = min(target, i) }
-                        if i > from, desiredMidY > mid { target = max(target, i) }
-                    }
-                    if target != from {
-                        var reordered = sibs
-                        let moved = reordered.remove(at: from)
-                        reordered.insert(moved, at: target)
-                        taskStore.reorderSubtasks(reordered, of: parent)
-                    }
-                }
-            }
-            .onEnded { _ in
-                if promoteTargetID == subtask.id {
-                    withAnimation(.spring(duration: 0.2)) { taskStore.unindentTask(subtask) }
-                }
-                withAnimation(.spring(duration: 0.2)) { dragOffset = 0 }
-                draggingTaskID = nil
-                promoteTargetID = nil
-            }
-        return AnyGesture(gesture.map { _ in () })
-    }
-
-    /// The root row whose vertical band contains `y` (nearest midpoint), if any.
-    private func rowUnder(_ y: CGFloat, excluding id: UUID) -> Task? {
-        filteredTasks
-            .filter { $0.id != id }
-            .min(by: { abs((rowMidYs[$0.id] ?? .infinity) - y) < abs((rowMidYs[$1.id] ?? .infinity) - y) })
-    }
-
-    /// Moves `task` to `target` index within the visible roots and persists order.
-    private func move(_ task: Task, in rows: [Task], to target: Int) {
-        guard let from = rows.firstIndex(where: { $0.id == task.id }), from != target else { return }
-        var reordered = rows
-        let moved = reordered.remove(at: from)
-        reordered.insert(moved, at: target)
-        taskStore.reorderRoots(reordered, in: project)
-    }
-
     private func addTaskAfter(_ task: Task) {
         // New tasks always start at Normal priority — they don't inherit the
         // priority of the task they were created after.
@@ -417,17 +271,6 @@ struct TaskListView: View {
 }
 
 // MARK: - Task Row (root + subtask, unified)
-
-/// Everything a subtask row needs to take part in dragging, passed down from
-/// TaskListView (which owns the drag state).
-struct DragContext {
-    let draggingTaskID: UUID?
-    let dragOffset: CGFloat
-    let promoteTargetID: UUID?
-    let coordinateSpace: String
-    /// Produces a drag gesture for (parent, subtask).
-    let subtaskGesture: (Task, Task) -> AnyGesture<Void>?
-}
 
 struct TaskRowView: View {
     @Bindable var task: Task
@@ -760,33 +603,6 @@ private struct NewItemButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-    }
-}
-
-/// The bullet's gestures. The drag (minimumDistance 4) handles reorder/nest; a
-/// separate tap toggles completion. Because the drag needs 4pt of movement to
-/// start, a click only triggers the tap and a drag only triggers the drag —
-/// SwiftUI arbitrates between them, so a drag never toggles the task.
-private struct BulletGestureModifier: ViewModifier {
-    let dragGesture: AnyGesture<Void>?
-    let onTap: () -> Void
-
-    func body(content: Content) -> some View {
-        if let dragGesture {
-            content
-                .onTapGesture(perform: onTap)
-                .gesture(dragGesture)
-        } else {
-            content.onTapGesture(perform: onTap)
-        }
-    }
-}
-
-/// Collects each root row's measured vertical midpoint, keyed by task id.
-private struct RowMidYKey: PreferenceKey {
-    static var defaultValue: [UUID: CGFloat] { [:] }
-    static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
     }
 }
 
