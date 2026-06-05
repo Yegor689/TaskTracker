@@ -9,6 +9,7 @@ enum SidebarSelection: Hashable {
 struct ContentView: View {
     @Query(sort: \Project.title) private var projects: [Project]
     @Environment(BackupManager.self) private var backupManager
+    @Environment(AppSettings.self) private var settings
     @State private var selection: SidebarSelection?
     @State private var showBackup = false
     // Persisted sidebar selection: "all", or a project UUID string.
@@ -30,6 +31,12 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .help("Settings (⌘,)")
+            }
+            ToolbarItem(placement: .automatic) {
                 Button { showBackup = true } label: {
                     Label("Backups", systemImage: "externaldrive")
                 }
@@ -44,7 +51,11 @@ struct ContentView: View {
         }
         .onAppear {
             if selection == nil {
-                selection = restoredSelection() ?? projects.first.map { .project($0) } ?? .all
+                if settings.restoreLastProject {
+                    selection = restoredSelection() ?? projects.first.map { .project($0) } ?? .all
+                } else {
+                    selection = .all
+                }
             }
         }
         .onChange(of: selection) { persistSelection() }

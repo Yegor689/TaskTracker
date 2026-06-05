@@ -31,6 +31,7 @@ extension Task {
 struct TaskListView: View {
     @Environment(TaskStore.self) private var taskStore
     @Environment(ReminderManager.self) private var reminderManager
+    @Environment(AppSettings.self) private var settings
     @Environment(\.undoManager) private var undoManager
     var project: Project
     @Binding var selection: SidebarSelection?
@@ -214,21 +215,21 @@ struct TaskListView: View {
     }
 
     private func addTask() {
-        let task = taskStore.addTask(to: project)
+        let task = taskStore.addTask(priority: settings.defaultPriority, to: project)
         if filter == .done { filter = .active }
         focus(task.id)
     }
 
     private func addTaskAfter(_ task: Task) {
-        // New tasks always start at Normal priority — they don't inherit the
+        // New tasks use the configured default priority — they don't inherit the
         // priority of the task they were created after.
-        let newTask = taskStore.addTask(to: project, after: task)
+        let newTask = taskStore.addTask(priority: settings.defaultPriority, to: project, after: task)
         focus(newTask.id)
     }
 
     /// Enter at the start of a task's title: insert a new empty task before it.
     private func addTaskBefore(_ task: Task) {
-        let newTask = taskStore.addTask(to: project, before: task)
+        let newTask = taskStore.addTask(priority: settings.defaultPriority, to: project, before: task)
         focus(newTask.id)
     }
 
@@ -243,7 +244,8 @@ struct TaskListView: View {
     }
 
     private func deleteIfEmpty(_ task: Task) {
-        guard task.subtasks.isEmpty else {
+        // Confirm deletion of a task with subtasks, unless the user turned that off.
+        if !task.subtasks.isEmpty && settings.confirmBeforeDelete {
             taskPendingDelete = task
             return
         }

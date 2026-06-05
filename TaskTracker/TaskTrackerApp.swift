@@ -8,6 +8,7 @@ struct TaskTrackerApp: App {
     let taskStore: TaskStore
     let backupManager: BackupManager
     let reminderManager: ReminderManager
+    let settings = AppSettings()
 
     init() {
         let schema = Schema([Project.self, Task.self])
@@ -41,8 +42,14 @@ struct TaskTrackerApp: App {
                 .environment(taskStore)
                 .environment(backupManager)
                 .environment(reminderManager)
+                .environment(settings)
+                .tint(settings.accent.color)
                 .frame(minWidth: 720, minHeight: 480)
-                .onAppear { clearExpiredReminders() }
+                .onAppear {
+                    settings.applyAppearance()
+                    clearExpiredReminders()
+                    applyDefaultFilter()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .markTaskDone)) { note in
                     guard let idStr = note.object as? String,
                           let uuid  = UUID(uuidString: idStr) else { return }
@@ -68,6 +75,22 @@ struct TaskTrackerApp: App {
         }
         .defaultSize(width: 960, height: 620)
         .modelContainer(container)
+
+        Settings {
+            SettingsView()
+                .environment(settings)
+                .environment(backupManager)
+                .tint(settings.accent.color)
+        }
+    }
+
+    /// If the user picked a fixed startup filter (not "remember last used"), apply
+    /// it once at launch by writing the shared taskFilter default that the task
+    /// views read via @AppStorage.
+    private func applyDefaultFilter() {
+        if let f = settings.defaultFilter {
+            UserDefaults.standard.set(f.rawValue, forKey: "taskFilter")
+        }
     }
 
     /// Clears reminders whose time has already passed (e.g. fired or were missed while the app was closed)
