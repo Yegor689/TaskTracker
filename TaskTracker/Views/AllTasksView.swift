@@ -193,7 +193,7 @@ struct AllTasksView: View {
     }
 
     private func navigateTo(_ task: Task, direction: Int) {
-        let flat = groupedSections.flatMap { $0.tasks }.flatMap { [$0] + $0.subtasks.sorted { $0.createdAt < $1.createdAt } }
+        let flat = groupedSections.flatMap { $0.tasks }.flatMap { [$0] + $0.subtasks.sorted { $0.sortIndex < $1.sortIndex } }
         guard let idx = flat.firstIndex(where: { $0.id == task.id }) else { return }
         let next = idx + direction
         guard next >= 0 && next < flat.count else { return }

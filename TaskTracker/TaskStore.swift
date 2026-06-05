@@ -4,12 +4,13 @@ import AppKit
 
 // Snapshot of a task used to reconstruct it on undo of a delete.
 private struct TaskSnapshot {
-    let titleRTF:  Data
-    let descRTF:   Data
-    let isDone:    Bool
-    let priority:  Int
-    let createdAt: Date
-    let subtasks:  [TaskSnapshot]
+    let titleRTF:   Data
+    let descRTF:    Data
+    let isDone:     Bool
+    let priority:   Int
+    let createdAt:  Date
+    let sortIndex:  Int
+    let subtasks:   [TaskSnapshot]
 
     init(_ task: Task) {
         titleRTF  = task.titleRTF
@@ -17,7 +18,8 @@ private struct TaskSnapshot {
         isDone    = task.isDone
         priority  = task.priority
         createdAt = task.createdAt
-        subtasks  = task.subtasks.sorted { $0.createdAt < $1.createdAt }.map { TaskSnapshot($0) }
+        sortIndex = task.sortIndex
+        subtasks  = task.subtasks.sorted { $0.sortIndex < $1.sortIndex }.map { TaskSnapshot($0) }
     }
 }
 
@@ -31,17 +33,61 @@ final class TaskStore {
         self.context = context
     }
 
+    /// One-time backfill: existing data has all sortIndex == 0. If a project's
+    /// root tasks (or any task's subtasks) all share index 0, assign sequential
+    /// indices from their legacy createdAt order so manual ordering has a basis.
+    func backfillSortIndicesIfNeeded() {
+        guard let projects = try? context.fetch(FetchDescriptor<Project>()) else { return }
+        for project in projects {
+            let roots = project.tasks.filter { $0.parent == nil }
+            if needsBackfill(roots) {
+                let ordered = roots.sorted { $0.createdAt < $1.createdAt }
+                for (i, t) in ordered.enumerated() { t.sortIndex = i }
+            }
+            for task in project.tasks where !task.subtasks.isEmpty {
+                if needsBackfill(task.subtasks) {
+                    let ordered = task.subtasks.sorted { $0.createdAt < $1.createdAt }
+                    for (i, s) in ordered.enumerated() { s.sortIndex = i }
+                }
+            }
+        }
+    }
+
+    private func needsBackfill(_ tasks: [Task]) -> Bool {
+        tasks.count > 1 && Set(tasks.map(\.sortIndex)).count == 1
+    }
+
+    // MARK: - Ordering helpers
+
+    /// Root tasks of a project, ordered by sortIndex.
+    static func orderedRoots(of project: Project) -> [Task] {
+        project.tasks.filter { $0.parent == nil }.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    /// Subtasks of a task, ordered by sortIndex.
+    static func orderedSubtasks(of parent: Task) -> [Task] {
+        parent.subtasks.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    /// Rewrites sortIndex over an ordered list so positions are 0,1,2,…
+    private func reindex(_ tasks: [Task]) {
+        for (i, t) in tasks.enumerated() { t.sortIndex = i }
+    }
+
     @discardableResult
     func addTask(plainTitle: String = "", priority: Int = 1, to project: Project, after afterTask: Task? = nil) -> Task {
         let task = Task(plainTitle: plainTitle, priority: priority, project: project)
-        if let afterTask {
-            for t in project.tasks where t.parent == nil && t.createdAt > afterTask.createdAt {
-                t.createdAt = t.createdAt.addingTimeInterval(0.001)
-            }
-            task.createdAt = afterTask.createdAt.addingTimeInterval(0.001)
-        }
         context.insert(task)
         project.tasks.append(task)
+
+        // Position the new task: right after `afterTask`, else at the end.
+        var roots = Self.orderedRoots(of: project).filter { $0.id != task.id }
+        if let afterTask, let idx = roots.firstIndex(where: { $0.id == afterTask.id }) {
+            roots.insert(task, at: idx + 1)
+        } else {
+            roots.append(task)
+        }
+        reindex(roots)
 
         undoManager?.registerUndo(withTarget: self) { [weak project] store in
             guard let project else { return }
@@ -63,6 +109,10 @@ final class TaskStore {
         }
         project.tasks.removeAll { $0.id == task.id }
         context.insert(task)
+        // Place at the end of the parent's subtasks and renumber both lists.
+        task.sortIndex = (parent.subtasks.map(\.sortIndex).max() ?? -1) + 1
+        reindex(Self.orderedSubtasks(of: parent))
+        reindex(Self.orderedRoots(of: project))
 
         undoManager?.registerUndo(withTarget: self) { [weak parent, weak project] store in
             guard let parent, let project else { return }
@@ -84,21 +134,76 @@ final class TaskStore {
         undoManager?.setActionName("Unindent")
     }
 
+    /// Drag-to-nest: makes `task` a subtask of `newParent`. No-op if it would nest
+    /// deeper than one level. (Thin wrapper over indentTask with guards.)
+    func nestTask(_ task: Task, under newParent: Task) {
+        guard task.id != newParent.id,
+              newParent.parent == nil,   // only nest under a root task
+              task.subtasks.isEmpty      // the dragged task can't have its own subtasks
+        else { return }
+        indentTask(task, previousTask: newParent)
+    }
+
+    /// Applies a new ordering to a parent task's subtasks (drag reorder). Undoable.
+    func reorderSubtasks(_ ordered: [Task], of parent: Task) {
+        let beforeOrder = Self.orderedSubtasks(of: parent).map(\.id)
+        reindex(ordered)
+        undoManager?.registerUndo(withTarget: self) { [weak parent] store in
+            guard let parent else { return }
+            let byID = Dictionary(uniqueKeysWithValues: parent.subtasks.map { ($0.id, $0) })
+            store.reindex(beforeOrder.compactMap { byID[$0] })
+            store.undoManager?.setActionName("Move Subtask")
+        }
+        undoManager?.setActionName("Move Subtask")
+    }
+
+    // MARK: - Reorder (drag to move)
+
+    /// Applies a new ordering to a project's root tasks (from a List .onMove).
+    /// `ordered` is the visible root tasks in their new order; their sortIndex is
+    /// rewritten to match. Undoable.
+    func reorderRoots(_ ordered: [Task], in project: Project) {
+        let before = Self.orderedRoots(of: project)
+        let beforeOrder = before.map(\.id)
+
+        // The visible list may be filtered (Active/Done). Rebuild the full root
+        // order by replacing the visible subset's positions with the new order,
+        // leaving any hidden roots where they were relative to the whole list.
+        let visibleIDs = Set(ordered.map(\.id))
+        var newOrder: [Task] = []
+        var movedQueue = ordered
+        for task in before {
+            if visibleIDs.contains(task.id) {
+                if !movedQueue.isEmpty { newOrder.append(movedQueue.removeFirst()) }
+            } else {
+                newOrder.append(task)
+            }
+        }
+        reindex(newOrder)
+
+        undoManager?.registerUndo(withTarget: self) { [weak project] store in
+            guard let project else { return }
+            let byID = Dictionary(uniqueKeysWithValues: project.tasks.map { ($0.id, $0) })
+            store.reindex(beforeOrder.compactMap { byID[$0] })
+            store.undoManager?.setActionName("Move Task")
+        }
+        undoManager?.setActionName("Move Task")
+    }
+
     @discardableResult
     func addSubtask(plainTitle: String = "", priority: Int = 1, to parent: Task, after afterSubtask: Task? = nil) -> Task {
         let subtask = Task(plainTitle: plainTitle, priority: priority, project: parent.project, parent: parent)
-        if let after = afterSubtask,
-           let idx = parent.subtasks.firstIndex(where: { $0.id == after.id }) {
-            // Bump createdAt of everything after so the new subtask sorts right after `after`
-            for s in parent.subtasks where s.createdAt > after.createdAt {
-                s.createdAt = s.createdAt.addingTimeInterval(0.001)
-            }
-            subtask.createdAt = after.createdAt.addingTimeInterval(0.001)
-            parent.subtasks.insert(subtask, at: idx + 1)
-        } else {
-            parent.subtasks.append(subtask)
-        }
         context.insert(subtask)
+        parent.subtasks.append(subtask)
+
+        // Position the new subtask: right after `afterSubtask`, else at the end.
+        var subs = Self.orderedSubtasks(of: parent).filter { $0.id != subtask.id }
+        if let after = afterSubtask, let idx = subs.firstIndex(where: { $0.id == after.id }) {
+            subs.insert(subtask, at: idx + 1)
+        } else {
+            subs.append(subtask)
+        }
+        reindex(subs)
 
         undoManager?.registerUndo(withTarget: self) { [weak parent] store in
             guard let parent else { return }
@@ -184,6 +289,10 @@ final class TaskStore {
         if !project.tasks.contains(where: { $0.id == task.id }) {
             project.tasks.append(task)
         }
+        // Place at the end of the project's root tasks and renumber both lists.
+        task.sortIndex = (Self.orderedRoots(of: project).filter { $0.id != task.id }.map(\.sortIndex).max() ?? -1) + 1
+        reindex(Self.orderedRoots(of: project))
+        reindex(Self.orderedSubtasks(of: parent))
     }
 
     private func restore(snapshot: TaskSnapshot, into project: Project, after afterTask: Task?, at createdAt: Date) {
@@ -192,9 +301,7 @@ final class TaskStore {
         task.descRTF   = snapshot.descRTF
         task.isDone    = snapshot.isDone
         task.createdAt = createdAt
-        if let afterTask {
-            task.createdAt = afterTask.createdAt.addingTimeInterval(0.001)
-        }
+        task.sortIndex = snapshot.sortIndex
         context.insert(task)
         project.tasks.append(task)
 
@@ -204,9 +311,17 @@ final class TaskStore {
             subtask.descRTF   = sub.descRTF
             subtask.isDone    = sub.isDone
             subtask.createdAt = sub.createdAt
+            subtask.sortIndex = sub.sortIndex
             context.insert(subtask)
             task.subtasks.append(subtask)
         }
+
+        // Re-seat the restored task at its original position among current roots.
+        var roots = Self.orderedRoots(of: project).filter { $0.id != task.id }
+        let insertAt = min(snapshot.sortIndex, roots.count)
+        roots.insert(task, at: insertAt)
+        reindex(roots)
+        _ = afterTask // position now comes from the snapshot's sortIndex
 
         undoManager?.registerUndo(withTarget: self) { [weak project] store in
             guard let project else { return }

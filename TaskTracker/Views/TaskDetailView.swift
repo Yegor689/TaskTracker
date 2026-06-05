@@ -10,7 +10,7 @@ struct TaskDetailView: View {
     private var doneCount: Int  { task.subtasks.filter(\.isDone).count }
     private var totalCount: Int { task.subtasks.count }
     private var allDone: Bool   { task.isDone && task.subtasks.allSatisfy(\.isDone) }
-    private var sortedSubtasks: [Task] { task.subtasks.sorted { $0.createdAt < $1.createdAt } }
+    private var sortedSubtasks: [Task] { task.subtasks.sorted(by: TaskListView.taskOrder) }
 
     var body: some View {
         ScrollView {

@@ -311,6 +311,11 @@ class RichInlineTextView: NSTextView {
     // Set to true when a keypress already handled deletion, so resignFirstResponder doesn't double-fire.
     var deletionHandled = false
 
+    // Reject foreign drags (e.g. a task being dragged to reorder) so their payload
+    // can never be inserted into the title as text.
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { [] }
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool { false }
+
     override func resignFirstResponder() -> Bool {
         let empty = string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let result = super.resignFirstResponder()

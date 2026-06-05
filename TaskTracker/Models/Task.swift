@@ -55,6 +55,10 @@ class Task {
     var isDone: Bool
     var priority: Int  // raw value of Priority: 0 = critical, 1 = normal, 2 = low
     var createdAt: Date
+    /// Manual position within the task's parent context (its project for root tasks,
+    /// or its parent task for subtasks). Lower comes first. This is the primary
+    /// ordering key; createdAt is only a tiebreaker / migration fallback.
+    var sortIndex: Int = 0
     /// When the task was most recently marked done; nil while incomplete. Used to
     /// order completed tasks (newest completion on top of the done group).
     var completedAt: Date?

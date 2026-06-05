@@ -30,6 +30,7 @@ struct TaskTrackerApp: App {
         taskStore       = TaskStore(context: container.mainContext)
         backupManager   = BackupManager(storeURL: storeURL)
         reminderManager = ReminderManager()
+        taskStore.backfillSortIndicesIfNeeded()
         backupManager.startAutoBackup()
     }
 
