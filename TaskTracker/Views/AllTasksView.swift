@@ -21,18 +21,10 @@ struct AllTasksView: View {
     @State private var taskPendingDelete: Task?
 
     var allTasks: [Task] {
-        let root = projects.flatMap { $0.tasks.filter { $0.parent == nil } }
-        let searched = searchText.isEmpty ? root : root.filter {
-            $0.plainTitle.localizedCaseInsensitiveContains(searchText) ||
-            $0.plainDesc.localizedCaseInsensitiveContains(searchText)
-        }
-        let filtered: [Task]
-        switch filter {
-        case .all:    filtered = searched
-        case .active: filtered = searched.filter { !$0.isDone }
-        case .done:   filtered = searched.filter {  $0.isDone }
-        }
-        return filtered.sorted(by: TaskListView.taskOrder)
+        projects
+            .flatMap { $0.tasks.filter { $0.parent == nil } }
+            .filter { $0.matchesSearch(searchText) && filter.matches($0) }
+            .sorted(by: TaskListView.taskOrder)
     }
 
     var groupedSections: [(header: String, tasks: [Task])] {
@@ -167,11 +159,7 @@ struct AllTasksView: View {
                 }
             }
         }
-        .onAppear {
-            taskStore.undoManager = undoManager
-            taskStore.reminderManager = reminderManager
-        }
-        .onChange(of: undoManager) { taskStore.undoManager = undoManager }
+        .wireTaskStore(taskStore, undoManager: undoManager, reminderManager: reminderManager)
         .alert("Delete Task?", isPresented: Binding(
             get: { taskPendingDelete != nil },
             set: { if !$0 { taskPendingDelete = nil } }

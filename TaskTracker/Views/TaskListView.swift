@@ -7,6 +7,23 @@ enum TaskFilter: String, CaseIterable {
     case all    = "All"
     case active = "Active"
     case done   = "Done"
+
+    func matches(_ task: Task) -> Bool {
+        switch self {
+        case .all:    return true
+        case .active: return !task.isDone
+        case .done:   return task.isDone
+        }
+    }
+}
+
+extension Task {
+    /// True if this task matches a (possibly empty) search query by title or description.
+    func matchesSearch(_ query: String) -> Bool {
+        query.isEmpty
+            || plainTitle.localizedCaseInsensitiveContains(query)
+            || plainDesc.localizedCaseInsensitiveContains(query)
+    }
 }
 
 // MARK: - Task List
@@ -48,30 +65,15 @@ struct TaskListView: View {
     // Flat ordered list: each root task followed by its visible subtasks.
     var flatTasks: [Task] {
         filteredTasks.flatMap { task -> [Task] in
-            let subs = task.subtasks.sorted(by: Self.taskOrder).filter { sub in
-                switch filter {
-                case .all:    return true
-                case .active: return !sub.isDone
-                case .done:   return sub.isDone
-                }
-            }
+            let subs = task.subtasks.sorted(by: Self.taskOrder).filter { filter.matches($0) }
             return [task] + subs
         }
     }
 
     var filteredTasks: [Task] {
-        let root = project.tasks.filter { $0.parent == nil }
-        let searched = searchText.isEmpty ? root : root.filter {
-            $0.plainTitle.localizedCaseInsensitiveContains(searchText) ||
-            $0.plainDesc.localizedCaseInsensitiveContains(searchText)
-        }
-        let filtered: [Task]
-        switch filter {
-        case .all:    filtered = searched
-        case .active: filtered = searched.filter { !$0.isDone }
-        case .done:   filtered = searched.filter {  $0.isDone }
-        }
-        return filtered.sorted(by: Self.taskOrder)
+        project.tasks
+            .filter { $0.parent == nil && $0.matchesSearch(searchText) && filter.matches($0) }
+            .sorted(by: Self.taskOrder)
     }
 
     /// Ordering shared by the list: incomplete tasks first in their manual
@@ -217,11 +219,7 @@ struct TaskListView: View {
             path = NavigationPath()
             focusedTaskID = nil
         }
-        .onAppear {
-            taskStore.undoManager = undoManager
-            taskStore.reminderManager = reminderManager
-        }
-        .onChange(of: undoManager) { taskStore.undoManager = undoManager }
+        .wireTaskStore(taskStore, undoManager: undoManager, reminderManager: reminderManager)
     }
 
     private func addTask() {
@@ -765,55 +763,6 @@ private struct NewItemButton: View {
     }
 }
 
-// MARK: - Task Row (used in TaskDetailView subtask list)
-
-struct TaskDetailRowView: View {
-    var task: Task
-
-    private var doneCount: Int  { task.subtasks.filter(\.isDone).count }
-    private var totalCount: Int { task.subtasks.count }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Button {
-                withAnimation(.spring(duration: 0.25)) { task.toggleDone() }
-            } label: {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(task.isDone ? .green : (task.priorityLevel == .critical ? .red : .secondary))
-                    .imageScale(.large)
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Text(task.plainTitle)
-                        .strikethrough(task.isDone)
-                        .foregroundStyle(task.isDone ? .secondary : .primary)
-                        .fontWeight(task.priorityLevel == .critical && !task.isDone ? .semibold : .regular)
-                    if task.priorityLevel != .normal && !task.isDone {
-                        Image(systemName: task.priorityLevel.iconName)
-                            .foregroundStyle(task.priorityLevel.color)
-                            .font(.caption)
-                    }
-                }
-                if totalCount > 0 {
-                    HStack(spacing: 5) {
-                        ProgressView(value: Double(doneCount), total: Double(totalCount))
-                            .progressViewStyle(.linear)
-                            .tint(doneCount == totalCount ? .green : .secondary)
-                            .frame(width: 56)
-                        Text("\(doneCount)/\(totalCount)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-
 /// The bullet's gestures. The drag (minimumDistance 4) handles reorder/nest; a
 /// separate tap toggles completion. Because the drag needs 4pt of movement to
 /// start, a click only triggers the tap and a drag only triggers the drag —
@@ -838,5 +787,30 @@ private struct RowMidYKey: PreferenceKey {
     static var defaultValue: [UUID: CGFloat] { [:] }
     static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
         value.merge(nextValue()) { _, new in new }
+    }
+}
+
+// MARK: - Store wiring
+
+private struct WireTaskStore: ViewModifier {
+    let taskStore: TaskStore
+    let undoManager: UndoManager?
+    let reminderManager: ReminderManager
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                taskStore.undoManager = undoManager
+                taskStore.reminderManager = reminderManager
+            }
+            .onChange(of: undoManager) { taskStore.undoManager = undoManager }
+    }
+}
+
+extension View {
+    /// Wires the environment's UndoManager and the ReminderManager into the shared
+    /// TaskStore. Used by the task list views that mutate tasks.
+    func wireTaskStore(_ store: TaskStore, undoManager: UndoManager?, reminderManager: ReminderManager) -> some View {
+        modifier(WireTaskStore(taskStore: store, undoManager: undoManager, reminderManager: reminderManager))
     }
 }
