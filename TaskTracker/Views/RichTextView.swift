@@ -9,6 +9,8 @@ struct RichTitleField: NSViewRepresentable {
     var isFocused: Bool
     var onFocus: () -> Void
     var onReturn: () -> Void
+    /// Enter pressed with caret at the very start: insert a new task before this one.
+    var onReturnAtStart: () -> Void = {}
     var onDeleteIfEmpty: () -> Void
     var onBlurIfEmpty: () -> Void
     var onTab: () -> Void
@@ -67,6 +69,7 @@ struct RichTitleField: NSViewRepresentable {
     func updateNSView(_ tv: RichInlineTextView, context: Context) {
         // Update the action box so RichInlineTextView always calls fresh closures
         context.coordinator.actions.onReturn        = onReturn
+        context.coordinator.actions.onReturnAtStart = onReturnAtStart
         context.coordinator.actions.onDeleteIfEmpty = onDeleteIfEmpty
         context.coordinator.actions.onBlurIfEmpty   = onBlurIfEmpty
         context.coordinator.actions.onTab           = onTab
@@ -189,6 +192,7 @@ struct RichTitleField: NSViewRepresentable {
 
 final class ActionBox {
     var onReturn:        () -> Void
+    var onReturnAtStart: () -> Void
     var onDeleteIfEmpty: () -> Void
     var onBlurIfEmpty:   () -> Void
     var onTab:           () -> Void
@@ -199,6 +203,7 @@ final class ActionBox {
 
     init(parent: RichTitleField) {
         onReturn        = parent.onReturn
+        onReturnAtStart = parent.onReturnAtStart
         onDeleteIfEmpty = parent.onDeleteIfEmpty
         onBlurIfEmpty   = parent.onBlurIfEmpty
         onTab           = parent.onTab
@@ -401,7 +406,19 @@ class RichInlineTextView: NSTextView {
     // Called by the delegate's doCommandBy — routed through ActionBox
     func handleInsertNewline() {
         let empty = string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if empty { deletionHandled = true; actions?.onDeleteIfEmpty() } else { actions?.onReturn() }
+        if empty {
+            deletionHandled = true
+            actions?.onDeleteIfEmpty()
+            return
+        }
+        // Enter with the caret at the very start (no selection) inserts a new task
+        // BEFORE this one, like splitting a list item at the cursor.
+        let sel = selectedRange()
+        if sel.location == 0 && sel.length == 0 {
+            actions?.onReturnAtStart()
+        } else {
+            actions?.onReturn()
+        }
     }
 
     func handleDeleteBackward() -> Bool {

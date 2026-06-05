@@ -150,14 +150,31 @@ struct TaskDetailView: View {
 
                     Divider().padding(.vertical, 10)
 
-                    Button {
-                        taskStore.addSubtask(to: task)
-                    } label: {
-                        Label("Add Subtask", systemImage: "plus.circle.fill")
-                            .foregroundStyle(Color.accentColor)
-                            .font(.callout.weight(.medium))
+                    HStack {
+                        Button {
+                            taskStore.addSubtask(to: task)
+                        } label: {
+                            Label("Add Subtask", systemImage: "plus.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                                .font(.callout.weight(.medium))
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        // Marks the task and all its subtasks done. Only shown when
+                        // there are subtasks and something is still incomplete.
+                        if totalCount > 0 && !allDone {
+                            Button {
+                                withAnimation(.spring(duration: 0.3)) { taskStore.completeTask(task) }
+                            } label: {
+                                Label("Complete All", systemImage: "checkmark.circle")
+                                    .font(.callout.weight(.medium))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(20)
                 .background(cardBackground)
@@ -169,14 +186,6 @@ struct TaskDetailView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle(task.plainTitle.isEmpty ? "Untitled" : task.plainTitle)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Complete All") {
-                    withAnimation(.spring(duration: 0.3)) { taskStore.completeTask(task) }
-                }
-                .disabled(allDone)
-            }
-        }
     }
 
     // MARK: - Components

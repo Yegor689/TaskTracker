@@ -97,7 +97,8 @@ struct AllTasksView: View {
                                     onNavigateUp:       { navigateTo(task, direction: -1) },
                                     onNavigateDown:     { navigateTo(task, direction: +1) },
                                     onNavigateDownFrom: { navigateTo($0, direction: +1) },
-                                    navigate:           { t in path.append(t) }
+                                    navigate:           { t in path.append(t) },
+                                    showProjectBadge:   grouping == .priority
                                 )
                                 .onTapGesture(count: 2) { path.append(task) }
                             }

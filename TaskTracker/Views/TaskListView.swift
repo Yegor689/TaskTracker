@@ -91,6 +91,7 @@ struct TaskListView: View {
                             isSubtask: false,
                             focusedID: $focusedTaskID,
                             onReturn:           { addTaskAfter(task) },
+                            onReturnAtStart:    { addTaskBefore(task) },
                             onDeleteIfEmpty:    { deleteIfEmpty(task) },
                             onDelete:           { taskStore.deleteTask(task) },
                             onIndent:           { indentTask(task) },
@@ -225,6 +226,12 @@ struct TaskListView: View {
         focus(newTask.id)
     }
 
+    /// Enter at the start of a task's title: insert a new empty task before it.
+    private func addTaskBefore(_ task: Task) {
+        let newTask = taskStore.addTask(to: project, before: task)
+        focus(newTask.id)
+    }
+
     private func indentTask(_ task: Task) {
         // Subtasks only nest one level deep; indenting a task that already has
         // subtasks would hide those grandchildren, so disallow it.
@@ -278,6 +285,7 @@ struct TaskRowView: View {
     @Environment(TaskStore.self) private var taskStore
     @Binding var focusedID: UUID?
     var onReturn:        () -> Void
+    var onReturnAtStart: () -> Void = {}
     var onDeleteIfEmpty: () -> Void
     var onDelete:        () -> Void
     var onIndent:        () -> Void
@@ -290,6 +298,9 @@ struct TaskRowView: View {
     var dragGesture: AnyGesture<Void>? = nil
     /// Shared drag context so subtask rows can take part in dragging too.
     var dragContext: DragContext? = nil
+    /// When set, shows a small pill with the task's project name (used in the
+    /// All Projects view when grouped by priority, where project context is lost).
+    var showProjectBadge: Bool = false
 
     @Environment(ReminderManager.self) private var reminderManager
     @State private var isHovered = false
@@ -339,6 +350,7 @@ struct TaskRowView: View {
                             isFocused: isFocused,
                             onFocus:         { focusedID = task.id },
                             onReturn:        onReturn,
+                            onReturnAtStart: onReturnAtStart,
                             onDeleteIfEmpty: onDeleteIfEmpty,
                             onBlurIfEmpty:   onDeleteIfEmpty,
                             onTab:           onIndent,
@@ -355,6 +367,16 @@ struct TaskRowView: View {
                                 .lineLimit(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if showProjectBadge, let projectName = task.project?.title {
+                            Label(projectName, systemImage: "folder")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.secondary.opacity(0.12)))
+                                .padding(.top, 2)
                         }
                     }
 

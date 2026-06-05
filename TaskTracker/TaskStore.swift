@@ -75,14 +75,17 @@ final class TaskStore {
     }
 
     @discardableResult
-    func addTask(plainTitle: String = "", priority: Int = 1, to project: Project, after afterTask: Task? = nil) -> Task {
+    func addTask(plainTitle: String = "", priority: Int = 1, to project: Project, after afterTask: Task? = nil, before beforeTask: Task? = nil) -> Task {
         let task = Task(plainTitle: plainTitle, priority: priority, project: project)
         context.insert(task)
         project.tasks.append(task)
 
-        // Position the new task: right after `afterTask`, else at the end.
+        // Position the new task: before `beforeTask`, else right after `afterTask`,
+        // else at the end.
         var roots = Self.orderedRoots(of: project).filter { $0.id != task.id }
-        if let afterTask, let idx = roots.firstIndex(where: { $0.id == afterTask.id }) {
+        if let beforeTask, let idx = roots.firstIndex(where: { $0.id == beforeTask.id }) {
+            roots.insert(task, at: idx)
+        } else if let afterTask, let idx = roots.firstIndex(where: { $0.id == afterTask.id }) {
             roots.insert(task, at: idx + 1)
         } else {
             roots.append(task)
