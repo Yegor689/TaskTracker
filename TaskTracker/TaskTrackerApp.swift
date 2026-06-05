@@ -46,6 +46,7 @@ struct TaskTrackerApp: App {
                 .tint(settings.accent.color)
                 .frame(minWidth: 720, minHeight: 480)
                 .onAppear {
+                    setApplicationIcon()
                     settings.applyAppearance()
                     clearExpiredReminders()
                     applyDefaultFilter()
@@ -87,6 +88,15 @@ struct TaskTrackerApp: App {
             SettingsView()
                 .environment(settings)
                 .tint(settings.accent.color)
+        }
+    }
+
+    /// Force the app's icon (used by the About panel and anywhere reading
+    /// NSApp.applicationIconImage) to the asset-catalog AppIcon. Without this the
+    /// About panel can show the generic icon even though the Dock icon is correct.
+    private func setApplicationIcon() {
+        if let icon = NSImage(named: "AppIcon") {
+            NSApplication.shared.applicationIconImage = icon
         }
     }
 
