@@ -25,7 +25,6 @@ final class BackupManager {
 
     private static let maxAutoBackups = 10
     private static let intervalDefaultsKey = "autoBackupIntervalHours"
-    private static let backupOnLaunchKey   = "backupOnLaunch"
 
     /// Selectable auto-backup intervals. `nil` rawValue (0) means disabled.
     static let intervalOptions = [0, 1, 6, 12, 24]
@@ -39,12 +38,6 @@ final class BackupManager {
             UserDefaults.standard.set(autoBackupIntervalHours, forKey: Self.intervalDefaultsKey)
             scheduleTimer()
         }
-    }
-
-    /// When true, an auto-backup is taken every time the app launches,
-    /// independent of the interval timer. Persisted in UserDefaults.
-    var backupOnLaunch: Bool {
-        didSet { UserDefaults.standard.set(backupOnLaunch, forKey: Self.backupOnLaunchKey) }
     }
 
     var autoBackups:       [Backup] { backups.filter { $0.kind == .auto       } }
@@ -61,26 +54,16 @@ final class BackupManager {
         } else {
             self.autoBackupIntervalHours = UserDefaults.standard.integer(forKey: Self.intervalDefaultsKey)
         }
-        // Default to backing up on launch on first run.
-        if UserDefaults.standard.object(forKey: Self.backupOnLaunchKey) == nil {
-            self.backupOnLaunch = true
-        } else {
-            self.backupOnLaunch = UserDefaults.standard.bool(forKey: Self.backupOnLaunchKey)
-        }
         try? FileManager.default.createDirectory(at: backupDir, withIntermediateDirectories: true)
         refresh()
     }
 
-    // Called on launch. If "back up on launch" is enabled, takes a backup now;
-    // otherwise backs up only if the interval has elapsed. Then arms the timer so
-    // interval backups keep running while the app stays open.
+    // Called on launch: backs up if the configured interval has elapsed since the
+    // last auto-backup, then arms the timer so interval backups keep running while
+    // the app stays open. (Launch backups are simply "is one due?" — no separate
+    // toggle.)
     func startAutoBackup() {
-        if backupOnLaunch {
-            createBackup(kind: .auto)
-            pruneAutoBackups()
-        } else {
-            createAutoBackupIfDue()
-        }
+        createAutoBackupIfDue()
         scheduleTimer()
     }
 

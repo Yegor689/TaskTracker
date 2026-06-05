@@ -18,114 +18,13 @@ struct BackupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Backups")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 4)
-
-            Text("A backup is a full snapshot of all projects. Restoring replaces all current data with that snapshot, but saves a “Before Restore” copy first so you can undo. Automatic backups keep the last 10 snapshots.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Text("Automatic backup")
-                        .font(.callout)
-                    Spacer()
-                    Picker("Automatic backup", selection: intervalBinding) {
-                        ForEach(BackupManager.intervalOptions, id: \.self) { hours in
-                            Text(intervalLabel(hours)).tag(hours)
-                        }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-
-                Toggle(isOn: backupOnLaunchBinding) {
-                    Text("Back up when opening the app")
-                        .font(.callout)
-                }
-                .toggleStyle(.switch)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
+            header
             Divider()
-
-            HStack(spacing: 10) {
-                TextField("Label (optional)", text: $labelText)
-                    .textFieldStyle(.roundedBorder)
-
-                Button {
-                    backupManager.createBackup(label: labelText)
-                    labelText = ""
-                } label: {
-                    Label("Create Backup", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-
+            controls
             Divider()
-
-            if backupManager.backups.isEmpty {
-                ContentUnavailableView("No Backups", systemImage: "externaldrive")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    if !backupManager.preRestoreBackups.isEmpty {
-                        Section("Before Restore") {
-                            ForEach(backupManager.preRestoreBackups) { backup in
-                                BackupRow(backup: backup, formatter: Self.dateFormatter) {
-                                    backupToRestore = backup
-                                    showRestoreConfirm = true
-                                } onDelete: {
-                                    backupManager.delete(backup: backup)
-                                }
-                            }
-                        }
-                    }
-
-                    if !backupManager.manualBackups.isEmpty {
-                        Section("Manual") {
-                            ForEach(backupManager.manualBackups) { backup in
-                                BackupRow(backup: backup, formatter: Self.dateFormatter) {
-                                    backupToRestore = backup
-                                    showRestoreConfirm = true
-                                } onDelete: {
-                                    backupManager.delete(backup: backup)
-                                }
-                            }
-                        }
-                    }
-
-                    if !backupManager.autoBackups.isEmpty {
-                        Section("Automatic") {
-                            ForEach(backupManager.autoBackups) { backup in
-                                BackupRow(backup: backup, formatter: Self.dateFormatter) {
-                                    backupToRestore = backup
-                                    showRestoreConfirm = true
-                                } onDelete: {
-                                    backupManager.delete(backup: backup)
-                                }
-                            }
-                        }
-                    }
-                }
-                .listStyle(.inset)
-            }
+            backupList
         }
-        .frame(width: 480, height: 460)
+        .frame(width: 500, height: 520)
         .confirmationDialog(
             "Restore this backup?",
             isPresented: $showRestoreConfirm,
@@ -154,18 +53,101 @@ struct BackupView: View {
         }
     }
 
-    private var intervalBinding: Binding<Int> {
-        Binding(
-            get: { backupManager.autoBackupIntervalHours },
-            set: { backupManager.autoBackupIntervalHours = $0 }
-        )
+    // MARK: Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Backups")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            Text("Each backup is a full snapshot of every project. Restoring replaces all current data with it — but a “Before Restore” copy is saved first, so you can undo.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
     }
 
-    private var backupOnLaunchBinding: Binding<Bool> {
-        Binding(
-            get: { backupManager.backupOnLaunch },
-            set: { backupManager.backupOnLaunch = $0 }
-        )
+    // MARK: Controls (interval + create)
+
+    private var controls: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Label("Automatic backup", systemImage: "clock.arrow.circlepath")
+                    .font(.callout)
+                Spacer()
+                Picker("Automatic backup", selection: intervalBinding) {
+                    ForEach(BackupManager.intervalOptions, id: \.self) { hours in
+                        Text(intervalLabel(hours)).tag(hours)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            HStack(spacing: 10) {
+                TextField("Label (optional)", text: $labelText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(createBackup)
+
+                Button(action: createBackup) {
+                    Label("Create Backup", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+    }
+
+    // MARK: List
+
+    @ViewBuilder private var backupList: some View {
+        if backupManager.backups.isEmpty {
+            ContentUnavailableView("No Backups Yet", systemImage: "externaldrive",
+                                   description: Text("Create one above, or wait for the next automatic backup."))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List {
+                section("Before Restore", backupManager.preRestoreBackups)
+                section("Manual", backupManager.manualBackups)
+                section("Automatic", backupManager.autoBackups)
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ items: [Backup]) -> some View {
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items) { backup in
+                    BackupRow(backup: backup, formatter: Self.dateFormatter) {
+                        backupToRestore = backup
+                        showRestoreConfirm = true
+                    } onDelete: {
+                        backupManager.delete(backup: backup)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Actions / helpers
+
+    private func createBackup() {
+        let trimmed = labelText.trimmingCharacters(in: .whitespaces)
+        backupManager.createBackup(label: trimmed)
+        labelText = ""
+    }
+
+    private var intervalBinding: Binding<Int> {
+        Binding(get: { backupManager.autoBackupIntervalHours },
+                set: { backupManager.autoBackupIntervalHours = $0 })
     }
 
     private func intervalLabel(_ hours: Int) -> String {
@@ -192,11 +174,25 @@ private struct BackupRow: View {
     let onRestore: () -> Void
     let onDelete: () -> Void
 
+    @State private var isHovered = false
+
+    private static let relative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .full
+        return f
+    }()
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(displayName)
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(iconColor)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
                     .font(.body)
+                    .lineLimit(1)
                 Text(formatter.string(from: backup.date))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -204,28 +200,58 @@ private struct BackupRow: View {
 
             Spacer()
 
-            Button("Restore", action: onRestore)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            // Relative age, fading out when the row is hovered to make room.
+            Text(Self.relative.localizedString(for: backup.date, relativeTo: Date()))
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .opacity(isHovered ? 0 : 1)
 
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
+            if isHovered {
+                Button("Restore", action: onRestore)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.red)
+                .help("Delete this backup")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.red.opacity(0.8))
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
     }
 
-    private var displayName: String {
-        // Strip "manual-" / "auto-" prefix and timestamp, show just the label if present
+    /// A label if the backup has one, otherwise a human description of its kind.
+    private var title: String {
         let withoutKind = backup.name
             .replacingOccurrences(of: "^(auto|manual|prerestore)-", with: "", options: .regularExpression)
-        // withoutKind is now "yyyy-MM-dd HH-mm-ss optional label"
+        // withoutKind is "yyyy-MM-dd HH-mm-ss optional label"
         let parts = withoutKind.split(separator: " ", maxSplits: 2)
-        if parts.count > 2 {
-            return String(parts[2])
+        if parts.count > 2 { return String(parts[2]) }
+        switch backup.kind {
+        case .manual:     return "Manual backup"
+        case .auto:       return "Automatic backup"
+        case .preRestore: return "Before restore"
         }
-        return formatter.string(from: backup.date)
+    }
+
+    private var icon: String {
+        switch backup.kind {
+        case .manual:     return "bookmark.fill"
+        case .auto:       return "clock.arrow.circlepath"
+        case .preRestore: return "arrow.uturn.backward.circle.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch backup.kind {
+        case .manual:     return .accentColor
+        case .auto:       return .secondary
+        case .preRestore: return .orange
+        }
     }
 }

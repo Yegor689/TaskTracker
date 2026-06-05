@@ -79,7 +79,6 @@ struct TaskTrackerApp: App {
         Settings {
             SettingsView()
                 .environment(settings)
-                .environment(backupManager)
                 .tint(settings.accent.color)
         }
     }
