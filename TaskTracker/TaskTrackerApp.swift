@@ -75,6 +75,13 @@ struct TaskTrackerApp: App {
         }
         .defaultSize(width: 960, height: 620)
         .modelContainer(container)
+        .commands {
+            CommandGroup(after: .appSettings) {
+                Button("Backups…") {
+                    NotificationCenter.default.post(name: .showBackups, object: nil)
+                }
+            }
+        }
 
         Settings {
             SettingsView()

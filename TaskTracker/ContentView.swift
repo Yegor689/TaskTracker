@@ -6,6 +6,11 @@ enum SidebarSelection: Hashable {
     case project(Project)
 }
 
+extension Notification.Name {
+    /// Posted by the app menu's "Backups…" command to open the Backups sheet.
+    static let showBackups = Notification.Name("showBackups")
+}
+
 struct ContentView: View {
     @Query(sort: \Project.title) private var projects: [Project]
     @Environment(BackupManager.self) private var backupManager
@@ -29,25 +34,15 @@ struct ContentView: View {
                 ContentUnavailableView("Select a Project", systemImage: "folder")
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .help("Settings (⌘,)")
-            }
-            ToolbarItem(placement: .automatic) {
-                Button { showBackup = true } label: {
-                    Label("Backups", systemImage: "externaldrive")
-                }
-                .help("Manage Backups")
-            }
-        }
         .toolbarBackground(.visible, for: .windowToolbar)
         .reminderToast()
         .sheet(isPresented: $showBackup) {
             BackupView()
                 .environment(backupManager)
+        }
+        // Opened from the app menu's "Backups…" command.
+        .onReceive(NotificationCenter.default.publisher(for: .showBackups)) { _ in
+            showBackup = true
         }
         .onAppear {
             if selection == nil {
