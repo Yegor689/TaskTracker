@@ -20,7 +20,7 @@ struct TaskListView: View {
 
     @State private var path = NavigationPath()
     @State private var focusedTaskID: UUID?
-    @State private var filter: TaskFilter = .active
+    @AppStorage("taskFilter") private var filter: TaskFilter = .active
     @State private var searchText = ""
     @State private var taskPendingDelete: Task?
 

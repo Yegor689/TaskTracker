@@ -14,9 +14,9 @@ struct AllTasksView: View {
     @Binding var selection: SidebarSelection?
 
     @State private var path = NavigationPath()
-    @State private var filter: TaskFilter = .active
+    @AppStorage("taskFilter") private var filter: TaskFilter = .active
     @State private var searchText = ""
-    @State private var grouping: TaskGrouping = .project
+    @AppStorage("allTasksGrouping") private var grouping: TaskGrouping = .project
     @State private var focusedTaskID: UUID?
     @State private var taskPendingDelete: Task?
 
@@ -36,20 +36,31 @@ struct AllTasksView: View {
     }
 
     var groupedSections: [(header: String, tasks: [Task])] {
+        // Completed tasks are pulled out of their project/priority group and
+        // collected into a single "Completed" section at the very end of the list.
+        let active = allTasks.filter { !$0.isDone }
+        let done   = allTasks.filter {  $0.isDone }
+
+        var sections: [(header: String, tasks: [Task])]
         switch grouping {
         case .project:
-            return projects.compactMap { project in
-                let tasks = allTasks.filter { $0.project?.id == project.id }
+            sections = projects.compactMap { project in
+                let tasks = active.filter { $0.project?.id == project.id }
                 guard !tasks.isEmpty else { return nil }
                 return (header: project.title, tasks: tasks)
             }
         case .priority:
-            return Priority.allCases.compactMap { level in
-                let tasks = allTasks.filter { $0.priorityLevel == level }
+            sections = Priority.allCases.compactMap { level in
+                let tasks = active.filter { $0.priorityLevel == level }
                 guard !tasks.isEmpty else { return nil }
                 return (header: level.label, tasks: tasks)
             }
         }
+
+        if !done.isEmpty {
+            sections.append((header: "Completed", tasks: done))
+        }
+        return sections
     }
 
     var body: some View {
@@ -59,7 +70,11 @@ struct AllTasksView: View {
                     ForEach(groupedSections, id: \.header) { section in
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
-                                if grouping == .priority,
+                                if section.header == "Completed" {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.caption)
+                                } else if grouping == .priority,
                                    let level = Priority.allCases.first(where: { $0.label == section.header }) {
                                     Image(systemName: level.isAccented ? level.iconName : "circle")
                                         .foregroundStyle(level.isAccented ? level.color : .secondary)

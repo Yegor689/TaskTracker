@@ -11,6 +11,8 @@ struct ContentView: View {
     @Environment(BackupManager.self) private var backupManager
     @State private var selection: SidebarSelection?
     @State private var showBackup = false
+    // Persisted sidebar selection: "all", or a project UUID string.
+    @AppStorage("sidebarSelection") private var savedSelection = ""
 
     var body: some View {
         NavigationSplitView {
@@ -42,8 +44,26 @@ struct ContentView: View {
         }
         .onAppear {
             if selection == nil {
-                selection = projects.first.map { .project($0) } ?? .all
+                selection = restoredSelection() ?? projects.first.map { .project($0) } ?? .all
             }
+        }
+        .onChange(of: selection) { persistSelection() }
+    }
+
+    /// Resolves the persisted selection string back into a SidebarSelection,
+    /// or nil if it can't be matched (e.g. the project was deleted).
+    private func restoredSelection() -> SidebarSelection? {
+        if savedSelection == "all" { return .all }
+        guard let uuid = UUID(uuidString: savedSelection),
+              let project = projects.first(where: { $0.id == uuid }) else { return nil }
+        return .project(project)
+    }
+
+    private func persistSelection() {
+        switch selection {
+        case .all:                   savedSelection = "all"
+        case .project(let project):  savedSelection = project.id.uuidString
+        case nil:                    break
         }
     }
 }
