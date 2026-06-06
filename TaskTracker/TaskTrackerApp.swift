@@ -30,9 +30,16 @@ struct TaskTrackerApp: App {
         projectStore    = ProjectStore(context: container.mainContext)
         taskStore       = TaskStore(context: container.mainContext)
         backupManager   = BackupManager(storeURL: storeURL)
+        backupManager.liveContainer = container
         reminderManager = ReminderManager()
         taskStore.backfillSortIndicesIfNeeded()
         backupManager.startAutoBackup()
+
+        // Debug-only: seed sample data at launch (in init so it runs regardless of
+        // window/onAppear timing). Triggered by TT_SEED_SAMPLE=1; never in normal use.
+        if ProcessInfo.processInfo.environment["TT_SEED_SAMPLE"] == "1" {
+            taskStore.seedSampleData()
+        }
     }
 
     var body: some Scene {
@@ -91,13 +98,17 @@ struct TaskTrackerApp: App {
         }
     }
 
-    /// Force the app's icon (used by the About panel and anywhere reading
-    /// NSApp.applicationIconImage) to the asset-catalog AppIcon. Without this the
-    /// About panel can show the generic icon even though the Dock icon is correct.
+    /// Ensure the About panel shows the real app icon. macOS loads the icon from
+    /// the compiled asset catalog (AppIcon.icns) at launch; we only force it from
+    /// that same .icns file. NSImage(named: "AppIcon") is NOT used here because on
+    /// macOS that lookup can resolve to a generic template image, which would
+    /// override the correct icon with a placeholder (the source of issue #10's
+    /// recurrence). If the .icns can't be loaded we leave the system default in
+    /// place rather than risk replacing it with something worse.
     private func setApplicationIcon() {
-        if let icon = NSImage(named: "AppIcon") {
-            NSApplication.shared.applicationIconImage = icon
-        }
+        guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let icon = NSImage(contentsOf: url) else { return }
+        NSApplication.shared.applicationIconImage = icon
     }
 
     /// If the user picked a fixed startup filter (not "remember last used"), apply

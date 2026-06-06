@@ -30,11 +30,11 @@ struct BackupView: View {
             isPresented: $showRestoreConfirm,
             titleVisibility: .visible
         ) {
-            Button("Restore and Relaunch", role: .destructive) {
+            Button("Restore", role: .destructive) {
                 guard let backup = backupToRestore else { return }
                 do {
                     try backupManager.restore(backup: backup)
-                    relaunch()
+                    dismiss()
                 } catch {
                     errorMessage = error.localizedDescription
                     showError = true
@@ -43,7 +43,7 @@ struct BackupView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let b = backupToRestore {
-                Text("This replaces ALL projects and tasks with the snapshot from \(Self.dateFormatter.string(from: b.date)) — it is not a per-project restore. Your current data is saved to a “Before Restore” backup first, so you can undo. The app will relaunch.")
+                Text("This replaces ALL projects and tasks with the snapshot from \(Self.dateFormatter.string(from: b.date)) — it is not a per-project restore. Your current data is saved to a single “Before Restore” backup first, so you can undo.")
             }
         }
         .alert("Restore Failed", isPresented: $showError) {
@@ -157,14 +157,6 @@ struct BackupView: View {
         case 24: return "Daily"
         default: return "Every \(hours) hours"
         }
-    }
-
-    private func relaunch() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-n", Bundle.main.bundlePath]
-        try? process.run()
-        NSApp.terminate(nil)
     }
 }
 

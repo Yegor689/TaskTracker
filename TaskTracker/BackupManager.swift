@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 enum BackupKind: String {
     case auto       = "auto"
@@ -22,6 +23,10 @@ struct Backup: Identifiable, Comparable {
 final class BackupManager {
     private let storeURL: URL
     private let backupDir: URL
+    /// The live model container. Restore mutates this directly so the UI updates
+    /// in place — the same proven path the sample seeder uses — instead of swapping
+    /// the store file or relaunching. Set by the app after construction.
+    @ObservationIgnored var liveContainer: ModelContainer?
 
     private static let maxAutoBackups = 10
     private static let intervalDefaultsKey = "autoBackupIntervalHours"
@@ -162,47 +167,87 @@ final class BackupManager {
         return backups.first
     }
 
-    func restore(backup: Backup) throws {
-        let fm = FileManager.default
+    enum RestoreError: Error { case noLiveContainer }
 
-        // Restore replaces ALL current data with the snapshot. First take a
-        // pre-restore safety backup of the current store so the user can always
-        // undo a restore. It's a real saved backup (never auto-pruned), distinct
-        // from the transient staging copy below. Skip if restoring a pre-restore
-        // backup itself, to avoid stacking redundant safety copies on undo.
-        if fm.fileExists(atPath: storeURL.path) && backup.kind != .preRestore {
+    /// Restores a backup IN PLACE: reads the backup's data with a throwaway
+    /// container and rewrites the live store's contents to match, so the UI updates
+    /// immediately — no relaunch, no swapping the store file under the open
+    /// SwiftData connection. Replaces ALL projects/tasks with the snapshot.
+    ///
+    /// It recreates objects exactly the way the app (and the sample seeder) create
+    /// them — setting BOTH sides of every relationship (`project.tasks.append`,
+    /// `parent.subtasks.append`) — because setting only the to-one side leaves the
+    /// inverse collections empty, which is what made an earlier in-place attempt
+    /// render nothing.
+    @MainActor
+    func restore(backup: Backup) throws {
+        guard let liveContainer else { throw RestoreError.noLiveContainer }
+        let live = liveContainer.mainContext
+
+        // Single rolling pre-restore safety backup so a restore is reversible
+        // (#16: replace any previous one). Skip when restoring a pre-restore backup.
+        if backup.kind != .preRestore {
+            try? live.save() // flush pending edits so the safety snapshot is current
+            preRestoreBackups.forEach { delete(backup: $0) }
             createBackup(label: "before restore", kind: .preRestore)
         }
 
-        // Stage the current store aside so a failed copy can't leave us with no
-        // store at all. Only remove the staged copy once the restore succeeds.
-        let staged = storeURL.appendingPathExtension("restoring-backup")
-        try? fm.removeItem(at: staged)
-        if fm.fileExists(atPath: storeURL.path) {
-            try fm.moveItem(at: storeURL, to: staged)
+        // Read the backup with a separate container so the live one is untouched.
+        let schema = Schema([Project.self, Task.self])
+        let config = ModelConfiguration(schema: schema, url: backup.url)
+        let sourceContainer = try ModelContainer(for: schema, configurations: config)
+        let source = ModelContext(sourceContainer)
+        let sourceProjects = try source.fetch(FetchDescriptor<Project>())
+        let sourceTasks = try source.fetch(FetchDescriptor<Task>())
+
+        // Wipe current data (cascades delete tasks), then recreate from the snapshot.
+        for project in try live.fetch(FetchDescriptor<Project>()) { live.delete(project) }
+        for task in try live.fetch(FetchDescriptor<Task>()) { live.delete(task) }
+
+        // Recreate projects, keyed by id so we can wire tasks to them.
+        var liveProjectsByID: [UUID: Project] = [:]
+        for sp in sourceProjects {
+            let project = Project(title: sp.title, desc: sp.desc)
+            project.id = sp.id
+            project.createdAt = sp.createdAt
+            live.insert(project)
+            liveProjectsByID[sp.id] = project
         }
 
-        let walDest = storeURL.appendingPathExtension("wal")
-        let shmDest = storeURL.appendingPathExtension("shm")
-        try? fm.removeItem(at: walDest)
-        try? fm.removeItem(at: shmDest)
+        // Recreate every task as a flat set first (no relationships), keyed by id.
+        // We read from a flat fetch and the to-one .project/.parent references —
+        // NOT the inverse collections (project.tasks/parent.subtasks) — so the
+        // restore is robust even if a source store's inverse links are stale.
+        var liveTasksByID: [UUID: Task] = [:]
+        for st in sourceTasks {
+            let copy = Task()
+            copy.id = st.id
+            copy.titleRTF = st.titleRTF
+            copy.descRTF = st.descRTF
+            copy.isDone = st.isDone
+            copy.priority = st.priority
+            copy.createdAt = st.createdAt
+            copy.sortIndex = st.sortIndex
+            copy.completedAt = st.completedAt
+            copy.reminderDate = st.reminderDate
+            live.insert(copy)
+            liveTasksByID[st.id] = copy
+        }
 
-        do {
-            try fm.copyItem(at: backup.url, to: storeURL)
-            let walSrc = backup.url.appendingPathExtension("wal")
-            let shmSrc = backup.url.appendingPathExtension("shm")
-            if fm.fileExists(atPath: walSrc.path) { try? fm.copyItem(at: walSrc, to: walDest) }
-            if fm.fileExists(atPath: shmSrc.path) { try? fm.copyItem(at: shmSrc, to: shmDest) }
-        } catch {
-            // Restore failed — put the original store back.
-            try? fm.removeItem(at: storeURL)
-            if fm.fileExists(atPath: staged.path) {
-                try? fm.moveItem(at: staged, to: storeURL)
+        // Wire relationships, setting BOTH sides so inverse collections hydrate.
+        for st in sourceTasks {
+            guard let task = liveTasksByID[st.id] else { continue }
+            if let pid = st.project?.id, let project = liveProjectsByID[pid] {
+                task.project = project
+                project.tasks.append(task)
             }
-            throw error
+            if let parentID = st.parent?.id, let parent = liveTasksByID[parentID] {
+                task.parent = parent
+                parent.subtasks.append(task)
+            }
         }
 
-        try? fm.removeItem(at: staged)
+        try live.save()
     }
 
     func delete(backup: Backup) {
