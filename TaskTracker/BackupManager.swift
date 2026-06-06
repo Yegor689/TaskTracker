@@ -26,6 +26,16 @@ final class BackupManager {
     private static let maxAutoBackups = 10
     private static let intervalDefaultsKey = "autoBackupIntervalHours"
 
+    /// The timestamp format embedded in every backup's filename. This — not the
+    /// file's creation date — is the source of truth for when a backup was made,
+    /// because copyItem preserves the source store's creation date, so on-disk
+    /// metadata would make every backup look as old as the original store.
+    private static let nameTimestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH-mm-ss"
+        return f
+    }()
+
     /// Selectable auto-backup intervals. `nil` rawValue (0) means disabled.
     static let intervalOptions = [0, 1, 6, 12, 24]
 
@@ -76,18 +86,21 @@ final class BackupManager {
         pruneAutoBackups()
     }
 
+    /// How often we wake up to check whether an auto-backup is due. We poll rather
+    /// than scheduling a single fire at the full interval so that a backup happens
+    /// `interval` after the *last backup* (not after launch), and so it still fires
+    /// for a long-running app even across system sleep, where a one-shot long timer
+    /// is unreliable.
+    private static let dueCheckCadence: TimeInterval = 5 * 60
+
     private func scheduleTimer() {
         timer?.invalidate()
         timer = nil
         guard autoBackupIntervalHours > 0 else { return }
-        let interval = TimeInterval(autoBackupIntervalHours) * 3600
-        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.createBackup(kind: .auto)
-            self.pruneAutoBackups()
+        let t = Timer(timeInterval: Self.dueCheckCadence, repeats: true) { [weak self] _ in
+            self?.createAutoBackupIfDue()
         }
-        // Tolerance lets the OS batch the timer for power efficiency; exact timing isn't critical.
-        t.tolerance = interval * 0.1
+        t.tolerance = Self.dueCheckCadence * 0.5
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }
@@ -97,14 +110,29 @@ final class BackupManager {
         let files = (try? fm.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: [.creationDateKey])) ?? []
         backups = files.compactMap { url -> Backup? in
             guard url.pathExtension == "store" else { return nil }
-            let date = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
             let stem = url.deletingPathExtension().lastPathComponent
             let kind: BackupKind
             if stem.hasPrefix("prerestore-") { kind = .preRestore }
             else if stem.hasPrefix("auto-")   { kind = .auto }
             else                              { kind = .manual }
+            // Prefer the timestamp baked into the filename; the file's creation
+            // date is unreliable because copyItem inherits the source store's.
+            let date = Self.date(fromStem: stem)
+                ?? (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+                ?? Date.distantPast
             return Backup(url: url, date: date, name: stem, kind: kind)
         }.sorted()
+    }
+
+    /// Parses the "yyyy-MM-dd HH-mm-ss" timestamp out of a backup filename stem
+    /// like "auto-2026-06-06 14-30-00 optional label".
+    private static func date(fromStem stem: String) -> Date? {
+        let withoutKind = stem.replacingOccurrences(
+            of: "^(auto|manual|prerestore)-", with: "", options: .regularExpression)
+        // The timestamp is the first two space-separated fields ("date time").
+        let fields = withoutKind.split(separator: " ")
+        guard fields.count >= 2 else { return nil }
+        return nameTimestampFormatter.date(from: "\(fields[0]) \(fields[1])")
     }
 
     @discardableResult
@@ -112,9 +140,7 @@ final class BackupManager {
         let fm = FileManager.default
         guard fm.fileExists(atPath: storeURL.path) else { return nil }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
-        let timestamp = formatter.string(from: Date())
+        let timestamp = Self.nameTimestampFormatter.string(from: Date())
         let prefix = kind.rawValue
         let name = label.isEmpty ? "\(prefix)-\(timestamp)" : "\(prefix)-\(timestamp) \(label)"
         let dest = backupDir.appending(component: "\(name).store")
