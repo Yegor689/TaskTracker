@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SQLite3
 
 enum BackupKind: String {
     case auto       = "auto"
@@ -150,21 +151,37 @@ final class BackupManager {
         let name = label.isEmpty ? "\(prefix)-\(timestamp)" : "\(prefix)-\(timestamp) \(label)"
         let dest = backupDir.appending(component: "\(name).store")
 
-        let walSrc  = storeURL.appendingPathExtension("wal")
-        let shmSrc  = storeURL.appendingPathExtension("shm")
-        let walDest = dest.appendingPathExtension("wal")
-        let shmDest = dest.appendingPathExtension("shm")
-
-        do {
-            try fm.copyItem(at: storeURL, to: dest)
-            if fm.fileExists(atPath: walSrc.path)  { try? fm.copyItem(at: walSrc,  to: walDest) }
-            if fm.fileExists(atPath: shmSrc.path)  { try? fm.copyItem(at: shmSrc,  to: shmDest) }
-        } catch {
-            return nil
-        }
+        // Snapshot via SQLite's online backup API rather than copying the files.
+        // The live store is WAL-mode and the app has it open, so recent changes
+        // (e.g. just-toggled completion or priority) live in the -wal, not yet in
+        // the base .store. A plain file copy captured an inconsistent trio, so a
+        // restore could lose those recent changes — or everything. The backup API
+        // reads the live DB consistently and writes a single self-contained file
+        // with no -wal/-shm dependency.
+        guard Self.sqliteOnlineBackup(from: storeURL, to: dest) else { return nil }
 
         refresh()
         return backups.first
+    }
+
+    /// Copies a live (possibly open, WAL-mode) SQLite database into `dest` as a
+    /// single consistent, self-contained file using SQLite's online backup API.
+    /// Returns true on success.
+    private static func sqliteOnlineBackup(from src: URL, to dest: URL) -> Bool {
+        try? FileManager.default.removeItem(at: dest)
+
+        var srcDB: OpaquePointer?
+        var dstDB: OpaquePointer?
+        defer { sqlite3_close(srcDB); sqlite3_close(dstDB) }
+
+        guard sqlite3_open_v2(src.path, &srcDB, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
+              sqlite3_open_v2(dest.path, &dstDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK
+        else { return false }
+
+        guard let backup = sqlite3_backup_init(dstDB, "main", srcDB, "main") else { return false }
+        sqlite3_backup_step(backup, -1) // copy all pages
+        let rc = sqlite3_backup_finish(backup)
+        return rc == SQLITE_OK
     }
 
     enum RestoreError: Error { case noLiveContainer }
