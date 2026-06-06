@@ -132,7 +132,7 @@ final class BackupManager {
 
     /// Parses the "yyyy-MM-dd HH-mm-ss" timestamp out of a backup filename stem
     /// like "auto-2026-06-06 14-30-00 optional label".
-    private static func date(fromStem stem: String) -> Date? {
+    static func date(fromStem stem: String) -> Date? {
         let withoutKind = stem.replacingOccurrences(
             of: "^(auto|manual|prerestore)-", with: "", options: .regularExpression)
         // The timestamp is the first two space-separated fields ("date time").
@@ -167,7 +167,7 @@ final class BackupManager {
     /// Copies a live (possibly open, WAL-mode) SQLite database into `dest` as a
     /// single consistent, self-contained file using SQLite's online backup API.
     /// Returns true on success.
-    private static func sqliteOnlineBackup(from src: URL, to dest: URL) -> Bool {
+    static func sqliteOnlineBackup(from src: URL, to dest: URL) -> Bool {
         try? FileManager.default.removeItem(at: dest)
 
         var srcDB: OpaquePointer?

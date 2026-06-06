@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000012FD0000000000001 /* TaskTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +17,22 @@
 			path = TaskTracker;
 			sourceTree = "<group>";
 		};
+		AA0000012FD0000000000002 /* TaskTrackerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TaskTrackerTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C7AEFF582FD0D3590091E2CB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000012FD0000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -41,6 +54,7 @@
 			isa = PBXGroup;
 			children = (
 				C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */,
+				AA0000012FD0000000000001 /* TaskTrackerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +84,29 @@
 			productReference = C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA0000012FD0000000000004 /* TaskTrackerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000012FD0000000000005 /* Build configuration list for PBXNativeTarget "TaskTrackerTests" */;
+			buildPhases = (
+				AA0000012FD0000000000006 /* Sources */,
+				AA0000012FD0000000000003 /* Frameworks */,
+				AA0000012FD0000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000012FD0000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000012FD0000000000002 /* TaskTrackerTests */,
+			);
+			name = TaskTrackerTests;
+			packageProductDependencies = (
+			);
+			productName = TaskTrackerTests;
+			productReference = AA0000012FD0000000000001 /* TaskTrackerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +119,10 @@
 				TargetAttributes = {
 					C7AEFF5A2FD0D3590091E2CB = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					AA0000012FD0000000000004 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = C7AEFF5A2FD0D3590091E2CB;
 					};
 				};
 			};
@@ -100,12 +141,20 @@
 			projectRoot = "";
 			targets = (
 				C7AEFF5A2FD0D3590091E2CB /* TaskTracker */,
+				AA0000012FD0000000000004 /* TaskTrackerTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		C7AEFF592FD0D3590091E2CB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000012FD0000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +171,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000012FD0000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA0000012FD0000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C7AEFF5A2FD0D3590091E2CB /* TaskTracker */;
+			targetProxy = AA0000012FD0000000000009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		AA0000012FD0000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7AEFF532FD0D3590091E2CB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C7AEFF5A2FD0D3590091E2CB;
+			remoteInfo = TaskTracker;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		C7AEFF642FD0D35B0091E2CB /* Debug */ = {
@@ -309,6 +383,38 @@
 			};
 			name = Release;
 		};
+		AA0000012FD000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+			};
+			name = Debug;
+		};
+		AA0000012FD000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -326,6 +432,15 @@
 			buildConfigurations = (
 				C7AEFF672FD0D35B0091E2CB /* Debug */,
 				C7AEFF682FD0D35B0091E2CB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000012FD0000000000005 /* Build configuration list for PBXNativeTarget "TaskTrackerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000012FD000000000000A /* Debug */,
+				AA0000012FD000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
