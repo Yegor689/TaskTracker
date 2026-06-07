@@ -33,18 +33,22 @@ struct SettingsView: View {
                     ForEach(TaskFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
                 }
             }
-
-            Section {
-                HStack {
-                    Spacer()
-                    Button("Restore Defaults") {
-                        settings.restoreDefaults()
-                    }
-                }
-            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 400)
+        // Restore Defaults lives in a fixed footer so it's always visible without
+        // scrolling, regardless of how tall the form grows.
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Spacer()
+                Button("Restore Defaults") {
+                    settings.restoreDefaults()
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.bar)
+        }
+        .frame(width: 460, height: 470)
     }
 }
 
