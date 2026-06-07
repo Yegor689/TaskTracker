@@ -113,7 +113,14 @@ struct BackupManagerTests {
 
     // MARK: - Round-trip integrity
 
-    @Test func backupThenRestorePreservesAllData() throws {
+    /// The core data-integrity guarantee: after backup → arbitrary mutation →
+    /// restore, the live store matches the backed-up state exactly — every field
+    /// of every task (the `Snap` covers title, desc, completion, priority,
+    /// ordering, completedAt, parent, and project), with no leftover post-backup
+    /// edits. Mutates in every way a user can (edit fields incl. the #18 priority/
+    /// completion regression, delete a task, add a new one) so the single equality
+    /// assertion exercises restore comprehensively.
+    @Test func backupThenRestoreReplacesLiveDataWithExactSnapshot() throws {
         let f = try Fixture(); defer { f.cleanup() }
         try seed(f)
         let before = try snapshot(f)
@@ -121,78 +128,28 @@ struct BackupManagerTests {
 
         let backup = try #require(f.manager.createBackup(label: "snap"))
 
-        // Mutate destructively: flip completion + priority, delete a task, rename.
+        // Mutate destructively in every direction.
         let all = try f.tasks()
-        let toEdit = try #require(all.first { $0.plainTitle == "Ship release" })
-        toEdit.setDone(true)
-        toEdit.priority = 2
-        let toDelete = try #require(all.first { $0.plainTitle == "Email client" })
-        f.context.delete(toDelete)
+        let edited = try #require(all.first { $0.plainTitle == "Ship release" })
+        edited.setDone(true)              // completion change
+        edited.priority = 2               // priority change (was critical)
+        f.context.delete(try #require(all.first { $0.plainTitle == "Email client" }))
+        f.context.insert(Task(plainTitle: "Added later", project: try f.projects().first!))
         try f.save()
-        #expect(try f.tasks().count == 5)
+        #expect(try f.tasks().count == 6) // 6 - 1 deleted + 1 added
 
         try f.manager.restore(backup: backup)
 
-        // Every task and field must match the pre-backup state exactly.
-        let after = try snapshot(f)
-        #expect(after == before)
-    }
+        // Exact match: restored fields, deleted task back, added task gone.
+        #expect(try snapshot(f) == before)
+        #expect(try f.tasks().contains { $0.plainTitle == "Added later" } == false)
 
-    @Test func restorePreservesPriorityAndCompletion() throws {
-        // Directly targets the #18 regression: critical priority and completed
-        // flags must survive a restore.
-        let f = try Fixture(); defer { f.cleanup() }
-        try seed(f)
-        let backup = try #require(f.manager.createBackup())
-
-        // Wipe priorities/completion in the live store.
-        for t in try f.tasks() { t.priority = 1; t.isDone = false; t.completedAt = nil }
-        try f.save()
-        #expect(try f.tasks().allSatisfy { $0.priority == 1 && !$0.isDone })
-
-        try f.manager.restore(backup: backup)
-
-        let restored = try f.tasks()
-        #expect(restored.filter { $0.priority == 0 }.count == 3) // critical preserved
-        #expect(restored.filter { $0.isDone }.count == 2)        // completion preserved
-        #expect(restored.filter { $0.completedAt != nil }.count == 2)
-    }
-
-    @Test func restorePreservesSubtaskHierarchy() throws {
-        let f = try Fixture(); defer { f.cleanup() }
-        try seed(f)
-        let backup = try #require(f.manager.createBackup())
-
-        for t in try f.tasks() { f.context.delete(t) }
-        try f.save()
-        #expect(try f.tasks().isEmpty)
-
-        try f.manager.restore(backup: backup)
-
-        let tasks = try f.tasks()
-        let clean = try #require(tasks.first { $0.plainTitle == "Clean flat" })
-        #expect(clean.subtasks.count == 2)
-        #expect(Set(clean.subtasks.map(\.plainTitle)) == ["Vacuum", "Dishes"])
-        // Inverse side hydrates too: the project lists its root tasks.
+        // Both relationship sides hydrate: the project lists its root tasks and a
+        // parent lists its subtasks.
         let personal = try #require(try f.projects().first { $0.title == "Personal" })
         #expect(personal.tasks.filter { $0.parent == nil }.count == 2)
-    }
-
-    @Test func restoreReplacesNewerDataEntirely() throws {
-        // Restoring must REPLACE current data, not merge: tasks added after the
-        // backup are gone afterward.
-        let f = try Fixture(); defer { f.cleanup() }
-        try seed(f)
-        let backup = try #require(f.manager.createBackup())
-
-        let extra = Task(plainTitle: "Added later", project: try f.projects().first!)
-        f.context.insert(extra)
-        try f.save()
-        #expect(try f.tasks().count == 7)
-
-        try f.manager.restore(backup: backup)
-        #expect(try f.tasks().count == 6)
-        #expect(try f.tasks().contains { $0.plainTitle == "Added later" } == false)
+        let clean = try #require(try f.tasks().first { $0.plainTitle == "Clean flat" })
+        #expect(Set(clean.subtasks.map(\.plainTitle)) == ["Vacuum", "Dishes"])
     }
 
     // MARK: - Backup management

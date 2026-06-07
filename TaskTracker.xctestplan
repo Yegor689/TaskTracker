@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "7E71AE88-40B0-4B46-8FFC-EF879D8D1658",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:TaskTracker.xcodeproj",
+      "identifier" : "C7AEFF5A2FD0D3590091E2CB",
+      "name" : "TaskTracker"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:TaskTracker.xcodeproj",
+        "identifier" : "AA0000012FD0000000000004",
+        "name" : "TaskTrackerTests"
+      }
+    }
+  ],
+  "version" : 1
+}
