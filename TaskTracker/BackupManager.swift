@@ -201,11 +201,13 @@ final class BackupManager {
     /// immediately — no relaunch, no swapping the store file under the open
     /// SwiftData connection. Replaces ALL projects/tasks with the snapshot.
     ///
-    /// It recreates objects exactly the way the app (and the sample seeder) create
-    /// them — setting BOTH sides of every relationship (`project.tasks.append`,
-    /// `parent.subtasks.append`) — because setting only the to-one side leaves the
-    /// inverse collections empty, which is what made an earlier in-place attempt
-    /// render nothing.
+    /// Data is carried through `ProjectDTO`/`TaskDTO`, so the set of restored
+    /// fields is declared in one place (the DTOs) rather than copied property by
+    /// property here. Models are rebuilt setting BOTH sides of every relationship
+    /// (`project.tasks.append`, `parent.subtasks.append`); setting only the to-one
+    /// side leaves the inverse collections empty, which made an earlier attempt
+    /// render nothing. Relationships are resolved from the DTOs' ids, so a restore
+    /// is robust even if the source store's inverse links are stale.
     @MainActor
     func restore(backup: Backup) throws {
         guard let liveContainer else { throw RestoreError.noLiveContainer }
@@ -219,62 +221,55 @@ final class BackupManager {
             createBackup(label: "before restore", kind: .preRestore)
         }
 
-        // Read the backup with a separate container so the live one is untouched.
-        let schema = Schema([Project.self, Task.self])
-        let config = ModelConfiguration(schema: schema, url: backup.url)
-        let sourceContainer = try ModelContainer(for: schema, configurations: config)
-        let source = ModelContext(sourceContainer)
-        let sourceProjects = try source.fetch(FetchDescriptor<Project>())
-        let sourceTasks = try source.fetch(FetchDescriptor<Task>())
+        let (projectDTOs, taskDTOs) = try Self.readSnapshot(at: backup.url)
 
         // Wipe current data (cascades delete tasks), then recreate from the snapshot.
         for project in try live.fetch(FetchDescriptor<Project>()) { live.delete(project) }
         for task in try live.fetch(FetchDescriptor<Task>()) { live.delete(task) }
 
-        // Recreate projects, keyed by id so we can wire tasks to them.
         var liveProjectsByID: [UUID: Project] = [:]
-        for sp in sourceProjects {
-            let project = Project(title: sp.title, desc: sp.desc)
-            project.id = sp.id
-            project.createdAt = sp.createdAt
+        for dto in projectDTOs {
+            let project = dto.makeModel()
             live.insert(project)
-            liveProjectsByID[sp.id] = project
+            liveProjectsByID[dto.id] = project
         }
 
-        // Recreate every task as a flat set first (no relationships), keyed by id.
-        // We read from a flat fetch and the to-one .project/.parent references —
-        // NOT the inverse collections (project.tasks/parent.subtasks) — so the
-        // restore is robust even if a source store's inverse links are stale.
         var liveTasksByID: [UUID: Task] = [:]
-        for st in sourceTasks {
-            let copy = Task()
-            copy.id = st.id
-            copy.titleRTF = st.titleRTF
-            copy.descRTF = st.descRTF
-            copy.isDone = st.isDone
-            copy.priority = st.priority
-            copy.createdAt = st.createdAt
-            copy.sortIndex = st.sortIndex
-            copy.completedAt = st.completedAt
-            copy.reminderDate = st.reminderDate
-            live.insert(copy)
-            liveTasksByID[st.id] = copy
+        for dto in taskDTOs {
+            let task = dto.makeModel()
+            live.insert(task)
+            liveTasksByID[dto.id] = task
         }
 
-        // Wire relationships, setting BOTH sides so inverse collections hydrate.
-        for st in sourceTasks {
-            guard let task = liveTasksByID[st.id] else { continue }
-            if let pid = st.project?.id, let project = liveProjectsByID[pid] {
+        // Wire relationships from the DTO ids, setting BOTH sides so inverse
+        // collections hydrate.
+        for dto in taskDTOs {
+            guard let task = liveTasksByID[dto.id] else { continue }
+            if let pid = dto.projectID, let project = liveProjectsByID[pid] {
                 task.project = project
                 project.tasks.append(task)
             }
-            if let parentID = st.parent?.id, let parent = liveTasksByID[parentID] {
+            if let parentID = dto.parentID, let parent = liveTasksByID[parentID] {
                 task.parent = parent
                 parent.subtasks.append(task)
             }
         }
 
         try live.save()
+    }
+
+    /// Reads a store file's full contents as DTOs, using a throwaway container so
+    /// the live store is untouched. Shared by restore and by tests asserting
+    /// backup integrity.
+    @MainActor
+    static func readSnapshot(at storeURL: URL) throws -> (projects: [ProjectDTO], tasks: [TaskDTO]) {
+        let schema = Schema([Project.self, Task.self])
+        let container = try ModelContainer(
+            for: schema, configurations: ModelConfiguration(schema: schema, url: storeURL))
+        let context = ModelContext(container)
+        let projects = try context.fetch(FetchDescriptor<Project>()).map(ProjectDTO.init)
+        let tasks = try context.fetch(FetchDescriptor<Task>()).map(TaskDTO.init)
+        return (projects, tasks)
     }
 
     func delete(backup: Backup) {

@@ -67,8 +67,10 @@ struct TaskListView: View {
 
     /// Ordering shared by the list: incomplete tasks first in their manual
     /// (sortIndex) order, then completed tasks grouped at the bottom with the
-    /// most recently completed on top.
-    static func taskOrder(_ lhs: Task, _ rhs: Task) -> Bool {
+    /// most recently completed on top. `nonisolated` — it's a pure comparator over
+    /// model values, so it can be passed to `sorted(by:)` without main-actor
+    /// isolation warnings.
+    nonisolated static func taskOrder(_ lhs: Task, _ rhs: Task) -> Bool {
         if lhs.isDone != rhs.isDone { return !lhs.isDone }
         if lhs.isDone {
             // Both done: newest completion first (on top of the done group).

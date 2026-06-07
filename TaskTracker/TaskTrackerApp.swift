@@ -34,12 +34,6 @@ struct TaskTrackerApp: App {
         reminderManager = ReminderManager()
         taskStore.backfillSortIndicesIfNeeded()
         backupManager.startAutoBackup()
-
-        // Debug-only: seed sample data at launch (in init so it runs regardless of
-        // window/onAppear timing). Triggered by TT_SEED_SAMPLE=1; never in normal use.
-        if ProcessInfo.processInfo.environment["TT_SEED_SAMPLE"] == "1" {
-            taskStore.seedSampleData()
-        }
     }
 
     var body: some Scene {
