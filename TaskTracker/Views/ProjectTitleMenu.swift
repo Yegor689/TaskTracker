@@ -11,7 +11,7 @@ struct ProjectTitleMenu: View {
         switch selection {
         case .project(let p): return p.title
         case .all:            return "All Projects"
-        case nil:             return "TaskTracker"
+        case nil:             return "Quillpoint"
         }
     }
 

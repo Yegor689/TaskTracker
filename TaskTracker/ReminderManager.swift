@@ -35,7 +35,7 @@ final class ReminderManager: NSObject, UNUserNotificationCenterDelegate {
             authorized = true
         case .denied:
             authorized = false
-            log.info("[ReminderManager] status=denied — open System Settings > Notifications > TaskTracker to re-enable")
+            log.info("[ReminderManager] status=denied — open System Settings > Notifications > Quillpoint to re-enable")
         @unknown default:
             refreshAuthStatus()
         }

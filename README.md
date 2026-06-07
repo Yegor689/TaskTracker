@@ -1,4 +1,4 @@
-# TaskTracker
+# Quillpoint
 
 A native macOS task manager built with SwiftUI and SwiftData.
 
@@ -29,7 +29,7 @@ restorable backups.
 ## Getting Started
 
 ```bash
-git clone https://github.com/Yegor689/TaskTracker.git
+git clone https://github.com/Yegor689/Quillpoint.git
 ```
 
 Open `TaskTracker.xcodeproj` in Xcode and run (⌘R). No dependencies — pure
