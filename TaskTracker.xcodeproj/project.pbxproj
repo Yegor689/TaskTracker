@@ -6,33 +6,43 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		AA0000012FD0000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7AEFF532FD0D3590091E2CB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C7AEFF5A2FD0D3590091E2CB;
+			remoteInfo = TaskTracker;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000012FD0000000000001 /* TaskTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C7AEFF5D2FD0D3590091E2CB /* TaskTracker */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TaskTracker;
-			sourceTree = "<group>";
-		};
 		AA0000012FD0000000000002 /* TaskTrackerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TaskTrackerTests;
 			sourceTree = "<group>";
 		};
+		C7AEFF5D2FD0D3590091E2CB /* TaskTracker */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TaskTracker;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		C7AEFF582FD0D3590091E2CB /* Frameworks */ = {
+		AA0000012FD0000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AA0000012FD0000000000003 /* Frameworks */ = {
+		C7AEFF582FD0D3590091E2CB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -42,11 +52,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C797945A2FD4DEC1002120DA /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000012FD0000000000002 /* TaskTrackerTests */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		C7AEFF522FD0D3590091E2CB = {
 			isa = PBXGroup;
 			children = (
 				C7AEFF5D2FD0D3590091E2CB /* TaskTracker */,
 				C7AEFF5C2FD0D3590091E2CB /* Products */,
+				C797945A2FD4DEC1002120DA /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -62,28 +81,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C7AEFF5A2FD0D3590091E2CB /* TaskTracker */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C7AEFF662FD0D35B0091E2CB /* Build configuration list for PBXNativeTarget "TaskTracker" */;
-			buildPhases = (
-				C7AEFF572FD0D3590091E2CB /* Sources */,
-				C7AEFF582FD0D3590091E2CB /* Frameworks */,
-				C7AEFF592FD0D3590091E2CB /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				C7AEFF5D2FD0D3590091E2CB /* TaskTracker */,
-			);
-			name = TaskTracker;
-			packageProductDependencies = (
-			);
-			productName = TaskTracker;
-			productReference = C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */;
-			productType = "com.apple.product-type.application";
-		};
 		AA0000012FD0000000000004 /* TaskTrackerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AA0000012FD0000000000005 /* Build configuration list for PBXNativeTarget "TaskTrackerTests" */;
@@ -107,6 +104,28 @@
 			productReference = AA0000012FD0000000000001 /* TaskTrackerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		C7AEFF5A2FD0D3590091E2CB /* TaskTracker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C7AEFF662FD0D35B0091E2CB /* Build configuration list for PBXNativeTarget "TaskTracker" */;
+			buildPhases = (
+				C7AEFF572FD0D3590091E2CB /* Sources */,
+				C7AEFF582FD0D3590091E2CB /* Frameworks */,
+				C7AEFF592FD0D3590091E2CB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C7AEFF5D2FD0D3590091E2CB /* TaskTracker */,
+			);
+			name = TaskTracker;
+			packageProductDependencies = (
+			);
+			productName = TaskTracker;
+			productReference = C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -117,12 +136,12 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					C7AEFF5A2FD0D3590091E2CB = {
-						CreatedOnToolsVersion = 26.5;
-					};
 					AA0000012FD0000000000004 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = C7AEFF5A2FD0D3590091E2CB;
+					};
+					C7AEFF5A2FD0D3590091E2CB = {
+						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -147,14 +166,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C7AEFF592FD0D3590091E2CB /* Resources */ = {
+		AA0000012FD0000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AA0000012FD0000000000007 /* Resources */ = {
+		C7AEFF592FD0D3590091E2CB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -164,14 +183,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C7AEFF572FD0D3590091E2CB /* Sources */ = {
+		AA0000012FD0000000000006 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AA0000012FD0000000000006 /* Sources */ = {
+		C7AEFF572FD0D3590091E2CB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -188,17 +207,39 @@
 		};
 /* End PBXTargetDependency section */
 
-/* Begin PBXContainerItemProxy section */
-		AA0000012FD0000000000009 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C7AEFF532FD0D3590091E2CB /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C7AEFF5A2FD0D3590091E2CB;
-			remoteInfo = TaskTracker;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin XCBuildConfiguration section */
+		AA0000012FD000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+			};
+			name = Debug;
+		};
+		AA0000012FD000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+			};
+			name = Release;
+		};
 		C7AEFF642FD0D35B0091E2CB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -383,41 +424,18 @@
 			};
 			name = Release;
 		};
-		AA0000012FD000000000000A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
-			};
-			name = Debug;
-		};
-		AA0000012FD000000000000B /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AA0000012FD0000000000005 /* Build configuration list for PBXNativeTarget "TaskTrackerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000012FD000000000000A /* Debug */,
+				AA0000012FD000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		C7AEFF562FD0D3590091E2CB /* Build configuration list for PBXProject "TaskTracker" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -432,15 +450,6 @@
 			buildConfigurations = (
 				C7AEFF672FD0D35B0091E2CB /* Debug */,
 				C7AEFF682FD0D35B0091E2CB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AA0000012FD0000000000005 /* Build configuration list for PBXNativeTarget "TaskTrackerTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AA0000012FD000000000000A /* Debug */,
-				AA0000012FD000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
