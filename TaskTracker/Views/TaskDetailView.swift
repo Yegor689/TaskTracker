@@ -4,6 +4,7 @@ import SwiftData
 struct TaskDetailView: View {
     @Environment(TaskStore.self) private var taskStore
     @Environment(ReminderManager.self) private var reminderManager
+    @Environment(\.appAccent) private var appAccent
     @Bindable var task: Task
     @State private var showReminderPopover = false
 
@@ -72,7 +73,7 @@ struct TaskDetailView: View {
                             text: task.reminderDate.map {
                                 $0.formatted(date: .abbreviated, time: .shortened)
                             } ?? "Remind me",
-                            tint: .accentColor,
+                            tint: appAccent,
                             filled: task.reminderDate != nil
                         )
                     }
@@ -127,7 +128,7 @@ struct TaskDetailView: View {
                     if totalCount > 0 {
                         ProgressView(value: Double(doneCount), total: Double(totalCount))
                             .progressViewStyle(.linear)
-                            .tint(doneCount == totalCount ? .green : .accentColor)
+                            .tint(doneCount == totalCount ? .green : appAccent)
                             .animation(.easeInOut, value: doneCount)
                             .padding(.top, 10)
                             .padding(.bottom, 4)
@@ -155,7 +156,7 @@ struct TaskDetailView: View {
                             taskStore.addSubtask(to: task)
                         } label: {
                             Label("Add Subtask", systemImage: "plus.circle.fill")
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(appAccent)
                                 .font(.callout.weight(.medium))
                         }
                         .buttonStyle(.plain)

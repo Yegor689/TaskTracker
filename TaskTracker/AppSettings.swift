@@ -103,4 +103,32 @@ final class AppSettings {
 
     /// The filter a fresh launch should use, or nil to keep the last-used one.
     var defaultFilter: TaskFilter? { TaskFilter(rawValue: defaultFilterRaw) }
+
+    /// Resets every preference to its first-launch default.
+    func restoreDefaults() {
+        theme               = .system
+        accent              = .blue
+        defaultPriority     = Priority.normal.rawValue
+        confirmBeforeDelete = true
+        defaultFilterRaw    = ""
+        restoreLastProject  = true
+    }
+}
+
+// MARK: - Accent color environment
+
+private struct AppAccentKey: EnvironmentKey {
+    // Matches the AppSettings.Accent default (.blue) so views have a sane value
+    // even before the real accent is injected.
+    static let defaultValue: Color = .blue
+}
+
+extension EnvironmentValues {
+    /// The user's chosen accent color (AppSettings.accent), threaded through the
+    /// view tree. Views use this instead of `Color.accentColor`, which on macOS
+    /// resolves to the *system* accent and ignores the in-app picker.
+    var appAccent: Color {
+        get { self[AppAccentKey.self] }
+        set { self[AppAccentKey.self] = newValue }
+    }
 }

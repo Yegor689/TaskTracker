@@ -33,6 +33,7 @@ struct TaskListView: View {
     @Environment(ReminderManager.self) private var reminderManager
     @Environment(AppSettings.self) private var settings
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.appAccent) private var appAccent
     var project: Project
     @Binding var selection: SidebarSelection?
 
@@ -118,7 +119,7 @@ struct TaskListView: View {
                             // Highlight the row the dragged task would nest under.
                             if drag.nestTargetID == task.id {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                                    .strokeBorder(appAccent, lineWidth: 2)
                             }
                         }
                         .offset(
@@ -290,6 +291,7 @@ struct TaskRowView: View {
     var showProjectBadge: Bool = false
 
     @Environment(ReminderManager.self) private var reminderManager
+    @Environment(\.appAccent) private var appAccent
     @State private var isHovered = false
     @State private var showReminderPopover = false
 
@@ -396,7 +398,7 @@ struct TaskRowView: View {
 
                         Button { showReminderPopover = true } label: {
                             Image(systemName: task.reminderDate != nil ? "bell.fill" : "bell")
-                                .foregroundStyle(task.reminderDate != nil ? Color.accentColor : Color.secondary.opacity(0.4))
+                                .foregroundStyle(task.reminderDate != nil ? appAccent : Color.secondary.opacity(0.4))
                                 .font(.system(size: infoSize))
                         }
                         .buttonStyle(.plain)
@@ -457,7 +459,7 @@ struct TaskRowView: View {
                         .overlay(alignment: .leading) {
                             if dragContext?.promoteTargetID == subtask.id {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                                    .strokeBorder(appAccent, lineWidth: 2)
                             }
                         }
                         .offset(
@@ -534,6 +536,7 @@ struct TaskRowView: View {
 // MARK: - Stats Footer
 
 private struct TaskStatsFooter: View {
+    @Environment(\.appAccent) private var appAccent
     var tasks: [Task]
     var filter: TaskFilter
 
@@ -563,7 +566,7 @@ private struct TaskStatsFooter: View {
                         Capsule().fill(Color.primary.opacity(0.08))
                         GeometryReader { geo in
                             Capsule()
-                                .fill(done == total ? Color.green : Color.accentColor)
+                                .fill(done == total ? Color.green : appAccent)
                                 .frame(width: max(0, geo.size.width * fraction))
                         }
                     }

@@ -45,6 +45,7 @@ struct TaskTrackerApp: App {
                 .environment(reminderManager)
                 .environment(settings)
                 .tint(settings.accent.color)
+                .environment(\.appAccent, settings.accent.color)
                 .frame(minWidth: 720, minHeight: 480)
                 .onAppear {
                     setApplicationIcon()
@@ -89,6 +90,7 @@ struct TaskTrackerApp: App {
             SettingsView()
                 .environment(settings)
                 .tint(settings.accent.color)
+                .environment(\.appAccent, settings.accent.color)
         }
     }
 

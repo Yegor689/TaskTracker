@@ -3,6 +3,7 @@ import SwiftUI
 /// A transient in-app banner shown when a reminder fires while the app is open.
 /// Listens for `.reminderFired` and auto-dismisses after a few seconds.
 struct ReminderToast: ViewModifier {
+    @Environment(\.appAccent) private var appAccent
     @State private var title: String?
     @State private var dismissTask: _Concurrency.Task<Void, Never>?
 
@@ -55,7 +56,7 @@ struct ReminderToast: ViewModifier {
         .frame(maxWidth: 360)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.accentColor)
+                .fill(appAccent)
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
         )
         .onTapGesture { dismiss() }

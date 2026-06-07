@@ -166,6 +166,7 @@ private struct BackupRow: View {
     let onRestore: () -> Void
     let onDelete: () -> Void
 
+    @Environment(\.appAccent) private var appAccent
     @State private var isHovered = false
 
     private static let relative: RelativeDateTimeFormatter = {
@@ -241,7 +242,7 @@ private struct BackupRow: View {
 
     private var iconColor: Color {
         switch backup.kind {
-        case .manual:     return .accentColor
+        case .manual:     return appAccent
         case .auto:       return .secondary
         case .preRestore: return .orange
         }

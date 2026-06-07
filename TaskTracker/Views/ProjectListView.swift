@@ -105,6 +105,7 @@ struct ProjectListView: View {
 }
 
 private struct AllProjectsRow: View {
+    @Environment(\.appAccent) private var appAccent
     var isSelected: Bool
     @State private var isHovered = false
 
@@ -117,7 +118,7 @@ private struct AllProjectsRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentColor : (isHovered ? Color.primary.opacity(0.07) : Color.clear))
+                    .fill(isSelected ? appAccent : (isHovered ? Color.primary.opacity(0.07) : Color.clear))
             )
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
@@ -125,6 +126,7 @@ private struct AllProjectsRow: View {
 }
 
 private struct ProjectRowView: View {
+    @Environment(\.appAccent) private var appAccent
     var project: Project
     var isSelected: Bool
     @State private var isHovered = false
@@ -160,7 +162,7 @@ private struct ProjectRowView: View {
             if total > 0 {
                 ProgressView(value: Double(done), total: Double(total))
                     .progressViewStyle(.linear)
-                    .tint(done == total ? .green : (isSelected ? Color.white.opacity(0.9) : .accentColor))
+                    .tint(done == total ? .green : (isSelected ? Color.white.opacity(0.9) : appAccent))
                     .animation(.easeInOut, value: done)
             }
         }
@@ -168,7 +170,7 @@ private struct ProjectRowView: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 7)
-                .fill(isSelected ? Color.accentColor : (isHovered ? Color.primary.opacity(0.07) : Color.clear))
+                .fill(isSelected ? appAccent : (isHovered ? Color.primary.opacity(0.07) : Color.clear))
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
