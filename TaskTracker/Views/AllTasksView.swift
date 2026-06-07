@@ -9,6 +9,7 @@ enum TaskGrouping: String, CaseIterable {
 struct AllTasksView: View {
     @Environment(TaskStore.self) private var taskStore
     @Environment(ReminderManager.self) private var reminderManager
+    @Environment(AppSettings.self) private var settings
     @Environment(\.undoManager) private var undoManager
     @Query(sort: \Project.title) private var projects: [Project]
     @Binding var selection: SidebarSelection?
@@ -161,23 +162,15 @@ struct AllTasksView: View {
             }
         }
         .wireTaskStore(taskStore, undoManager: undoManager, reminderManager: reminderManager)
-        .alert("Delete Task?", isPresented: Binding(
-            get: { taskPendingDelete != nil },
-            set: { if !$0 { taskPendingDelete = nil } }
-        )) {
-            Button("Delete", role: .destructive) {
-                if let t = taskPendingDelete { taskStore.deleteTask(t); taskPendingDelete = nil }
-            }
-            Button("Cancel", role: .cancel) { taskPendingDelete = nil }
-        } message: {
-            if let t = taskPendingDelete {
-                Text("\"\(t.plainTitle)\" has \(t.subtasks.count) subtask\(t.subtasks.count == 1 ? "" : "s") that will also be deleted.")
-            }
-        }
+        .deleteConfirmation(pending: $taskPendingDelete) { taskStore.deleteTask($0) }
     }
 
     private func deleteIfEmpty(_ task: Task) {
-        guard task.subtasks.isEmpty else { taskPendingDelete = task; return }
+        // Confirm deletion of a task with subtasks, unless the user turned that off.
+        if settings.confirmDeletion(of: task) {
+            taskPendingDelete = task
+            return
+        }
         taskStore.deleteTask(task)
     }
 

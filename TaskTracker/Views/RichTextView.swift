@@ -395,11 +395,9 @@ class RichInlineTextView: NSTextView {
 
     private func isAtLastLine() -> Bool {
         guard let layout = layoutManager, let container = textContainer else { return true }
-        let end = max(0, (string as NSString).length)
         let caretRect = layout.boundingRect(forGlyphRange: NSRange(location: selectedRange().location, length: 0), in: container)
         let lastGlyph = max(0, layout.numberOfGlyphs - 1)
         let lastLineRect = layout.boundingRect(forGlyphRange: NSRange(location: lastGlyph, length: 0), in: container)
-        _ = end
         return caretRect.minY >= lastLineRect.minY - 2
     }
 

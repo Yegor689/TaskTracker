@@ -196,19 +196,7 @@ struct TaskListView: View {
                 }
             }
         }
-        .alert("Delete Task?", isPresented: Binding(
-            get: { taskPendingDelete != nil },
-            set: { if !$0 { taskPendingDelete = nil } }
-        )) {
-            Button("Delete", role: .destructive) {
-                if let t = taskPendingDelete { confirmDelete(t) }
-            }
-            Button("Cancel", role: .cancel) { taskPendingDelete = nil }
-        } message: {
-            if let t = taskPendingDelete {
-                Text("\"\(t.plainTitle)\" has \(t.subtasks.count) subtask\(t.subtasks.count == 1 ? "" : "s") that will also be deleted.")
-            }
-        }
+        .deleteConfirmation(pending: $taskPendingDelete) { performDelete($0) }
         .onChange(of: project.id) {
             path = NavigationPath()
             focusedTaskID = nil
@@ -247,15 +235,10 @@ struct TaskListView: View {
 
     private func deleteIfEmpty(_ task: Task) {
         // Confirm deletion of a task with subtasks, unless the user turned that off.
-        if !task.subtasks.isEmpty && settings.confirmBeforeDelete {
+        if settings.confirmDeletion(of: task) {
             taskPendingDelete = task
             return
         }
-        performDelete(task)
-    }
-
-    private func confirmDelete(_ task: Task) {
-        taskPendingDelete = nil
         performDelete(task)
     }
 
@@ -654,5 +637,48 @@ extension View {
     /// TaskStore. Used by the task list views that mutate tasks.
     func wireTaskStore(_ store: TaskStore, undoManager: UndoManager?, reminderManager: ReminderManager) -> some View {
         modifier(WireTaskStore(taskStore: store, undoManager: undoManager, reminderManager: reminderManager))
+    }
+}
+
+// MARK: - Delete confirmation
+
+/// Owns the "Delete Task?" confirmation alert shared by the task list views, so
+/// the alert markup and the `confirmBeforeDelete` policy live in one place
+/// instead of being copied (and drifting) between views.
+private struct DeleteConfirmation: ViewModifier {
+    @Binding var pending: Task?
+    let onConfirm: (Task) -> Void
+
+    func body(content: Content) -> some View {
+        content.alert("Delete Task?", isPresented: Binding(
+            get: { pending != nil },
+            set: { if !$0 { pending = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let task = pending { pending = nil; onConfirm(task) }
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: {
+            if let task = pending {
+                Text("\"\(task.plainTitle)\" has \(task.subtasks.count) subtask\(task.subtasks.count == 1 ? "" : "s") that will also be deleted.")
+            }
+        }
+    }
+}
+
+extension View {
+    /// Presents the shared delete-confirmation alert, calling `onConfirm` when the
+    /// user confirms. Callers gate which tasks reach `pending` via `confirmDeletion`.
+    func deleteConfirmation(pending: Binding<Task?>, onConfirm: @escaping (Task) -> Void) -> some View {
+        modifier(DeleteConfirmation(pending: pending, onConfirm: onConfirm))
+    }
+}
+
+extension AppSettings {
+    /// Whether deleting `task` should be confirmed first: only tasks with subtasks,
+    /// and only when the user hasn't turned confirmation off. The single source of
+    /// truth for the delete-confirmation policy, shared by the task list views.
+    func confirmDeletion(of task: Task) -> Bool {
+        !task.subtasks.isEmpty && confirmBeforeDelete
     }
 }
