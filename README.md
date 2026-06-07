@@ -1,25 +1,41 @@
-# Quillpoint
+<p align="center">
+  <img src="assets/logo.png" alt="Quillpoint" width="160">
+</p>
 
-A native macOS task manager built with SwiftUI and SwiftData.
+<h1 align="center">Quillpoint</h1>
 
-![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
-![Swift](https://img.shields.io/badge/swift-6.0-orange)
-![License](https://img.shields.io/badge/license-MIT-blue)
+<p align="center"><strong>A calm, keyboard-first task manager for macOS.</strong></p>
 
-Organize work into projects and tasks, with rich-text notes, subtasks,
-priorities, reminders, and drag-and-drop ordering — all backed by automatic,
-restorable backups.
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform">
+  <img src="https://img.shields.io/badge/swift-6.0-orange" alt="Swift">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
+</p>
 
-## Features
+Quillpoint keeps your work in plain, nestable lists you can fly through without
+ever reaching for the mouse — type a task, hit Return for the next, Tab to nest
+it under the last. It's a native SwiftUI app: fast, quiet, and built to stay out
+of your way. And because losing a to-do list is its own small disaster, every
+restore snapshots your current data first, so nothing you do is one click from
+gone.
 
-- **Projects & tasks** — group tasks into projects, with one level of subtasks and rich-text titles and descriptions (bold, italic, links).
-- **Priorities** — Critical, Normal, and Low, each color-coded; completed tasks sink to the bottom.
-- **Drag and drop** — reorder tasks by dragging, drop one onto another to nest it, or drag a subtask out to promote it.
-- **Reminders** — attach a date/time to any task and get a macOS notification with a "Mark Done" action.
-- **Two views** — a focused per-project list, or an All Projects view grouped by project or priority.
-- **Keyboard-first** — arrow keys, Enter, and Tab/Shift+Tab to navigate, create, and nest without the mouse.
-- **Settings** — theme, accent color, and default behaviors (⌘,).
-- **Safe by default** — full undo/redo, automatic backups, and one-click restore that snapshots your current data first.
+![Quillpoint showing the All Projects view grouped by priority](assets/screenshot.png)
+
+## Why Quillpoint
+
+- **Write, don't fill out forms.** Tasks are rich text — **bold**, *italic*, and
+  links right in the title or notes. Paste from anywhere; formatting comes along.
+- **Structure that bends to you.** Drag to reorder, drop one task onto another to
+  nest it, drag a subtask out to promote it. Completed work quietly sinks to the
+  bottom so the top of your list is always what's next.
+- **Fingers on the keys.** Arrow keys, Return, and Tab/Shift+Tab move, create,
+  and nest tasks without a single click. ⌘N for a new item, ⌘, for settings.
+- **Two ways to look at it.** A focused, per-project list when you're heads-down,
+  or an All Projects view grouped by project or priority when you're planning.
+- **Reminders that reach you.** Attach a date and time to any task and get a
+  native macOS notification with a "Mark Done" action built in.
+- **Yours to keep.** Full undo/redo, automatic backups on a schedule you choose,
+  and one-click restore that always backs up your current state first.
 
 ## Requirements
 
@@ -32,16 +48,17 @@ restorable backups.
 git clone https://github.com/Yegor689/Quillpoint.git
 ```
 
-Open `TaskTracker.xcodeproj` in Xcode and run (⌘R). No dependencies — pure
-SwiftUI and SwiftData.
+Open `TaskTracker.xcodeproj` in Xcode and run (⌘R). No dependencies, no setup —
+pure SwiftUI and SwiftData.
 
 ## Architecture
 
 The app is a SwiftUI `NavigationSplitView` over a SwiftData store. UI lives in
 `Views/`, with `@Observable` stores (`TaskStore`, `ProjectStore`,
-`BackupManager`, `ReminderManager`, `AppSettings`) handling mutations and
-side effects. See [docs/MODEL.md](docs/MODEL.md) for the data model and a
-view/manager breakdown.
+`BackupManager`, `ReminderManager`, `AppSettings`) handling mutations and side
+effects. Backups use SQLite's online-backup API for consistent, WAL-safe
+snapshots, and restore happens in place so the window updates live. See
+[docs/MODEL.md](docs/MODEL.md) for the data model and a view/manager breakdown.
 
 ## License
 
