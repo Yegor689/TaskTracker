@@ -365,9 +365,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_CFBundleDisplayName = Quillpoint;
-					INFOPLIST_KEY_NSUserNotificationUsageDescription = "Quillpoint uses notifications to remind you about tasks.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "A calm, keyboard-first task manager for macOS.";
+				INFOPLIST_KEY_NSUserNotificationUsageDescription = "Quillpoint uses notifications to remind you about tasks.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -399,9 +399,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_CFBundleDisplayName = Quillpoint;
-					INFOPLIST_KEY_NSUserNotificationUsageDescription = "Quillpoint uses notifications to remind you about tasks.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "A calm, keyboard-first task manager for macOS.";
+				INFOPLIST_KEY_NSUserNotificationUsageDescription = "Quillpoint uses notifications to remind you about tasks.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
