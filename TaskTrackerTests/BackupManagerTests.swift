@@ -54,11 +54,38 @@ struct BackupManagerTests {
         func cleanup() { try? FileManager.default.removeItem(at: dir) }
     }
 
-    /// Every task in the live store as TaskDTOs keyed by id. Reuses the same DTO
-    /// the backup/restore uses, so the comparison covers exactly the fields that
-    /// get persisted — no separate field list to drift out of sync with the model.
-    private func taskDTOs(_ f: Fixture) throws -> [UUID: TaskDTO] {
-        Dictionary(uniqueKeysWithValues: try f.tasks().map { ($0.id, TaskDTO($0)) })
+    /// A value snapshot of a task's persisted fields, for asserting round-trip
+    /// integrity by id. Lives in the test (not production) and lists the fields a
+    /// restore must preserve — if a model field is added and a restore should keep
+    /// it, add it here and the integrity test starts enforcing it.
+    struct TaskFields: Equatable {
+        let titleRTF: Data
+        let descRTF: Data
+        let isDone: Bool
+        let priority: Int
+        let createdAt: Date
+        let sortIndex: Int
+        let completedAt: Date?
+        let reminderDate: Date?
+        let projectID: UUID?
+        let parentID: UUID?
+        init(_ t: Task) {
+            titleRTF = t.titleRTF
+            descRTF = t.descRTF
+            isDone = t.isDone
+            priority = t.priority
+            createdAt = t.createdAt
+            sortIndex = t.sortIndex
+            completedAt = t.completedAt
+            reminderDate = t.reminderDate
+            projectID = t.project?.id
+            parentID = t.parent?.id
+        }
+    }
+
+    /// Every task in the live store as TaskFields keyed by id.
+    private func taskFields(_ f: Fixture) throws -> [UUID: TaskFields] {
+        Dictionary(uniqueKeysWithValues: try f.tasks().map { ($0.id, TaskFields($0)) })
     }
 
     /// Seeds a representative dataset covering every field/edge: multiple
@@ -95,14 +122,14 @@ struct BackupManagerTests {
 
     /// The core data-integrity guarantee: after backup → arbitrary mutation →
     /// restore, the live store matches the backed-up state exactly — compared via
-    /// TaskDTO, so every persisted field is checked with no separate field list to
-    /// drift. Mutates in every way a user can (edit fields incl. the #18 priority/
-    /// completion regression, delete a task, add a new one) so the single equality
-    /// assertion exercises restore comprehensively.
+    /// TaskFields, which captures every persisted field. Mutates in every way a
+    /// user can (edit fields incl. the #18 priority/completion regression, delete a
+    /// task, add a new one) so the single equality assertion exercises restore
+    /// comprehensively.
     @Test func backupThenRestoreReplacesLiveDataWithExactSnapshot() throws {
         let f = try Fixture(); defer { f.cleanup() }
         try seed(f)
-        let before = try taskDTOs(f)
+        let before = try taskFields(f)
         #expect(before.count == 6)
 
         let backup = try #require(f.manager.createBackup(label: "snap"))
@@ -120,7 +147,7 @@ struct BackupManagerTests {
         try f.manager.restore(backup: backup)
 
         // Exact match: every restored field, deleted task back, added task gone.
-        #expect(try taskDTOs(f) == before)
+        #expect(try taskFields(f) == before)
         #expect(try f.tasks().contains { $0.plainTitle == "Added later" } == false)
 
         // Both relationship sides hydrate: the project lists its root tasks and a
