@@ -12,14 +12,8 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Accent color", selection: $settings.accent) {
-                    ForEach(AppSettings.Accent.allCases) { accent in
-                        HStack {
-                            Circle().fill(accent.color).frame(width: 12, height: 12)
-                            Text(accent.label)
-                        }
-                        .tag(accent)
-                    }
+                LabeledContent("Accent color") {
+                    AccentSwatchPicker(selection: $settings.accent)
                 }
             }
 
@@ -39,8 +33,56 @@ struct SettingsView: View {
                     ForEach(TaskFilter.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
                 }
             }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Restore Defaults") {
+                        settings.restoreDefaults()
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 360)
+        .frame(width: 460, height: 400)
+    }
+}
+
+/// A row of color swatches for choosing the accent. The selected swatch is
+/// ringed and shows a checkmark, so the current choice is obvious at a glance.
+private struct AccentSwatchPicker: View {
+    @Binding var selection: AppSettings.Accent
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(AppSettings.Accent.allCases) { accent in
+                let isSelected = accent == selection
+                Button {
+                    selection = accent
+                } label: {
+                    Circle()
+                        .fill(accent.color)
+                        .frame(width: 20, height: 20)
+                        .overlay {
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .overlay {
+                            // Ring around the selected swatch for an extra cue that
+                            // reads even for very light colors.
+                            Circle()
+                                .strokeBorder(.primary.opacity(isSelected ? 0.5 : 0), lineWidth: 2)
+                                .padding(-3)
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(accent.label)
+                .accessibilityLabel(accent.label)
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            }
+        }
     }
 }
