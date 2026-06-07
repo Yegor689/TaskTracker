@@ -98,13 +98,14 @@ Tasks are ordered by `sortIndex` within their context (root tasks within a proje
 
 | View | Purpose |
 |------|---------|
+| `ContentView` | Root `NavigationSplitView`; hosts the sidebar and the selected project / All Projects detail, and the Backups sheet |
 | `TaskListView` | Tasks for a single selected project; filter (All/Active/Done), search, inline editing, indent/unindent, and drag-to-reorder/nest |
 | `TaskDragController` | `@Observable` engine holding all drag state + logic for reorder/nest/promote |
 | `AllTasksView` | Tasks across all projects; filter, search, group-by (Project or Priority), and a "Completed" section at the bottom |
 | `TaskDetailView` | Full detail for a single task — rich text title/description, subtask list, priority, reminder, completion |
 | `ProjectListView` | Sidebar list of projects plus an "All Projects" entry at the top |
-| `SettingsView` | Settings window (General + Backups tabs), opened via ⌘, |
-| `BackupView` | Backup management sheet — view, create, restore |
+| `SettingsView` | Settings window (appearance + behavior), opened via ⌘, |
+| `BackupView` | Backup management sheet — view, create, restore; opened from the Backups menu command |
 | `ReminderPopover` / `ReminderToast` | Reminder date/time picker and the in-app banner shown when one fires |
 
 ## Non-model managers
@@ -113,6 +114,6 @@ Tasks are ordered by `sortIndex` within their context (root tasks within a proje
 |------|---------|
 | `TaskStore` | All task mutations (add/delete/complete/indent/reorder) with undo registration |
 | `ProjectStore` | Project mutations |
-| `BackupManager` | Auto / manual / pre-restore backups; restore with rollback |
+| `BackupManager` | Auto / manual / pre-restore backups. Snapshots the live store via SQLite's online backup API (consistent even with uncommitted WAL data); restores in place by rewriting the live store from the snapshot, keeping a single rolling pre-restore safety backup |
 | `ReminderManager` | Schedules local notifications and handles their actions |
 | `AppSettings` | Persisted user preferences (theme, accent, defaults), surfaced in Settings |

@@ -40,7 +40,7 @@ SwiftUI and SwiftData.
 The app is a SwiftUI `NavigationSplitView` over a SwiftData store. UI lives in
 `Views/`, with `@Observable` stores (`TaskStore`, `ProjectStore`,
 `BackupManager`, `ReminderManager`, `AppSettings`) handling mutations and
-side effects. See [MODEL.md](TaskTracker/MODEL.md) for the data model and a
+side effects. See [docs/MODEL.md](docs/MODEL.md) for the data model and a
 view/manager breakdown.
 
 ## License
