@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "C7AEFF5A2FD0D3590091E2CB"
-               BuildableName = "TaskTracker.app"
+               BuildableName = "Quillpoint.app"
                BlueprintName = "TaskTracker"
                ReferencedContainer = "container:TaskTracker.xcodeproj">
             </BuildableReference>
@@ -64,7 +64,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C7AEFF5A2FD0D3590091E2CB"
-            BuildableName = "TaskTracker.app"
+            BuildableName = "Quillpoint.app"
             BlueprintName = "TaskTracker"
             ReferencedContainer = "container:TaskTracker.xcodeproj">
          </BuildableReference>
@@ -81,7 +81,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C7AEFF5A2FD0D3590091E2CB"
-            BuildableName = "TaskTracker.app"
+            BuildableName = "Quillpoint.app"
             BlueprintName = "TaskTracker"
             ReferencedContainer = "container:TaskTracker.xcodeproj">
          </BuildableReference>

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
-@testable import TaskTracker
+@testable import Quillpoint
 
 /// Black-box tests for BackupManager. They exercise only the public API
 /// (createBackup / restore / backups), run against an isolated temporary store

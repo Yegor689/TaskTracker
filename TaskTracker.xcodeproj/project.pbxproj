@@ -19,7 +19,7 @@
 /* Begin PBXFileReference section */
 		AA0000012FD0000000000001 /* TaskTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C797948C2FD5BEB4002120DA /* TaskTracker.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = TaskTracker.xctestplan; sourceTree = "<group>"; };
-		C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7AEFF5B2FD0D3590091E2CB /* Quillpoint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quillpoint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -66,7 +66,7 @@
 		C7AEFF5C2FD0D3590091E2CB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */,
+				C7AEFF5B2FD0D3590091E2CB /* Quillpoint.app */,
 				AA0000012FD0000000000001 /* TaskTrackerTests.xctest */,
 			);
 			name = Products;
@@ -117,7 +117,7 @@
 			packageProductDependencies = (
 			);
 			productName = TaskTracker;
-			productReference = C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */;
+			productReference = C7AEFF5B2FD0D3590091E2CB /* Quillpoint.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -214,7 +214,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quillpoint.app/Contents/MacOS/Quillpoint";
 			};
 			name = Debug;
 		};
@@ -230,7 +230,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTrackerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TaskTracker.app/Contents/MacOS/TaskTracker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Quillpoint.app/Contents/MacOS/Quillpoint";
 			};
 			name = Release;
 		};
@@ -375,7 +375,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTracker;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Quillpoint;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -409,7 +409,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = co.TaskTracker;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Quillpoint;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
