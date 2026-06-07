@@ -18,6 +18,7 @@
 
 /* Begin PBXFileReference section */
 		AA0000012FD0000000000001 /* TaskTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C797948C2FD5BEB4002120DA /* TaskTracker.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = TaskTracker.xctestplan; sourceTree = "<group>"; };
 		C7AEFF5B2FD0D3590091E2CB /* TaskTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -52,20 +53,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		C797945A2FD4DEC1002120DA /* Recovered References */ = {
-			isa = PBXGroup;
-			children = (
-				AA0000012FD0000000000002 /* TaskTrackerTests */,
-			);
-			name = "Recovered References";
-			sourceTree = "<group>";
-		};
 		C7AEFF522FD0D3590091E2CB = {
 			isa = PBXGroup;
 			children = (
+				C797948C2FD5BEB4002120DA /* TaskTracker.xctestplan */,
 				C7AEFF5D2FD0D3590091E2CB /* TaskTracker */,
+				AA0000012FD0000000000002 /* TaskTrackerTests */,
 				C7AEFF5C2FD0D3590091E2CB /* Products */,
-				C797945A2FD4DEC1002120DA /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
