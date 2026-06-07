@@ -79,6 +79,26 @@ class Task {
         self.subtasks = []
     }
 
+    /// Returns a detached copy carrying every SCALAR field of this task — used by
+    /// backup restore to recreate a task in another store. Relationships
+    /// (`project`, `parent`, `subtasks`) are deliberately NOT copied: they point
+    /// into this task's store, so the caller wires them by id in the destination
+    /// store. Keeping this next to the stored properties is the single place to
+    /// update when a field is added — see the backup round-trip integrity test.
+    func cloneScalars() -> Task {
+        let copy = Task()
+        copy.id = id
+        copy.titleRTF = titleRTF
+        copy.descRTF = descRTF
+        copy.isDone = isDone
+        copy.priority = priority
+        copy.createdAt = createdAt
+        copy.sortIndex = sortIndex
+        copy.completedAt = completedAt
+        copy.reminderDate = reminderDate
+        return copy
+    }
+
     /// Typed view over the stored `priority` Int. Falls back to `.normal` for any
     /// unexpected stored value so the UI never breaks on bad data.
     var priorityLevel: Priority {

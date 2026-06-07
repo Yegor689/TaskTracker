@@ -232,28 +232,18 @@ final class BackupManager {
         for project in try live.fetch(FetchDescriptor<Project>()) { live.delete(project) }
         for task in try live.fetch(FetchDescriptor<Task>()) { live.delete(task) }
 
+        // Recreate each model by cloning its scalar fields (the field list lives on
+        // the model's cloneScalars()), keyed by id. Relationships are wired below.
         var liveProjectsByID: [UUID: Project] = [:]
         for sp in sourceProjects {
-            let project = Project(title: sp.title, desc: sp.desc)
-            project.id = sp.id
-            project.createdAt = sp.createdAt
+            let project = sp.cloneScalars()
             live.insert(project)
             liveProjectsByID[sp.id] = project
         }
 
-        // Create each task as a flat model first (scalar fields), keyed by id.
         var liveTasksByID: [UUID: Task] = [:]
         for st in sourceTasks {
-            let task = Task()
-            task.id = st.id
-            task.titleRTF = st.titleRTF
-            task.descRTF = st.descRTF
-            task.isDone = st.isDone
-            task.priority = st.priority
-            task.createdAt = st.createdAt
-            task.sortIndex = st.sortIndex
-            task.completedAt = st.completedAt
-            task.reminderDate = st.reminderDate
+            let task = st.cloneScalars()
             live.insert(task)
             liveTasksByID[st.id] = task
         }

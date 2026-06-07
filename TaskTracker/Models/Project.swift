@@ -16,4 +16,15 @@ class Project {
         self.createdAt = Date()
         self.tasks = []
     }
+
+    /// Returns a detached copy carrying every SCALAR field of this project — used
+    /// by backup restore to recreate a project in another store. The `tasks`
+    /// relationship is NOT copied; the caller wires tasks by id in the destination
+    /// store. Update this when a field is added — see the backup integrity test.
+    func cloneScalars() -> Project {
+        let copy = Project(title: title, desc: desc)
+        copy.id = id
+        copy.createdAt = createdAt
+        return copy
+    }
 }
