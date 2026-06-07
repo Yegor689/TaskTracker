@@ -1,88 +1,219 @@
 import Testing
 import Foundation
-import SQLite3
+import SwiftData
 @testable import TaskTracker
 
-/// Tests for BackupManager's core, container-independent behavior — the two
-/// areas that regressed in v1.0.x: backup-filename date parsing (#13) and
-/// capturing a consistent snapshot of a WAL-mode store (#18).
+/// Black-box tests for BackupManager. They exercise only the public API
+/// (createBackup / restore / backups), run against an isolated temporary store
+/// and backup directory (never production data or preferences), and focus on
+/// the one thing that matters here: a backup → mutate → restore round-trip must
+/// preserve user data exactly. A bug here means data loss.
+@MainActor
 struct BackupManagerTests {
 
-    // MARK: - Filename timestamp parsing (#13)
-    //
-    // Backups derive their date from the timestamp baked into the filename, not
-    // from filesystem creation metadata (copyItem inherits the source store's
-    // creation date, which made every backup look equally old).
+    // MARK: - Isolated fixture
 
-    private static let fmt: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH-mm-ss"
-        return f
-    }()
+    /// An isolated app-like environment: a SwiftData store and a BackupManager
+    /// whose backup directory and defaults live in a unique temp folder.
+    @MainActor
+    final class Fixture {
+        let dir: URL
+        let storeURL: URL
+        let container: ModelContainer
+        let manager: BackupManager
 
-    @Test func parsesTimestampFromAutoStem() throws {
-        let date = try #require(BackupManager.date(fromStem: "auto-2026-06-06 14-30-00"))
-        #expect(Self.fmt.string(from: date) == "2026-06-06 14-30-00")
+        init() throws {
+            dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("TTTest-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            storeURL = dir.appendingPathComponent("Test.store")
+
+            let schema = Schema([Project.self, Task.self])
+            container = try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(schema: schema, url: storeURL))
+
+            let suiteName = "TTTest-\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
+            manager = BackupManager(
+                storeURL: storeURL,
+                backupDir: dir.appendingPathComponent("Backups", isDirectory: true),
+                defaults: defaults)
+            manager.liveContainer = container
+        }
+
+        var context: ModelContext { container.mainContext }
+
+        /// Persists pending changes to disk so a backup (which reads the file)
+        /// sees them.
+        func save() throws { try context.save() }
+
+        func tasks() throws -> [Task] { try context.fetch(FetchDescriptor<Task>()) }
+        func projects() throws -> [Project] { try context.fetch(FetchDescriptor<Project>()) }
+
+        func cleanup() { try? FileManager.default.removeItem(at: dir) }
     }
 
-    @Test func parsesTimestampFromManualStemWithLabel() throws {
-        let date = try #require(BackupManager.date(fromStem: "manual-2026-01-02 09-05-07 before trip"))
-        #expect(Self.fmt.string(from: date) == "2026-01-02 09-05-07")
+    /// A snapshot of a task's user-visible fields, for asserting integrity by id.
+    struct Snap: Equatable {
+        let title: String
+        let desc: String
+        let isDone: Bool
+        let priority: Int
+        let sortIndex: Int
+        let hasCompletedAt: Bool
+        let parentID: UUID?
+        let projectTitle: String?
+        init(_ t: Task) {
+            title = t.plainTitle
+            desc = t.plainDesc
+            isDone = t.isDone
+            priority = t.priority
+            sortIndex = t.sortIndex
+            hasCompletedAt = t.completedAt != nil
+            parentID = t.parent?.id
+            projectTitle = t.project?.title
+        }
     }
 
-    @Test func parsesTimestampFromPreRestoreStem() throws {
-        let date = try #require(BackupManager.date(fromStem: "prerestore-2025-12-31 23-59-59 before restore"))
-        #expect(Self.fmt.string(from: date) == "2025-12-31 23-59-59")
+    private func snapshot(_ f: Fixture) throws -> [UUID: Snap] {
+        Dictionary(uniqueKeysWithValues: try f.tasks().map { ($0.id, Snap($0)) })
     }
 
-    @Test func returnsNilForUnparseableStem() {
-        #expect(BackupManager.date(fromStem: "auto-not-a-date") == nil)
-        #expect(BackupManager.date(fromStem: "garbage") == nil)
+    /// Seeds a representative dataset covering every field/edge: multiple
+    /// projects, critical/normal/low priorities, completed + incomplete tasks,
+    /// subtasks, and rich-text descriptions.
+    @discardableResult
+    private func seed(_ f: Fixture) throws -> Void {
+        let ctx = f.context
+        let personal = Project(title: "Personal", desc: "home")
+        let work = Project(title: "Work", desc: "job")
+        ctx.insert(personal); ctx.insert(work)
+
+        func task(_ title: String, _ project: Project, priority: Int, done: Bool,
+                  parent: Task? = nil, sortIndex: Int = 0, desc: String = "") -> Task {
+            let t = Task(plainTitle: title, plainDesc: desc, priority: priority,
+                         project: project, parent: parent)
+            t.setDone(done)
+            t.sortIndex = sortIndex
+            ctx.insert(t)
+            project.tasks.append(t)
+            if let parent { parent.subtasks.append(t) }
+            return t
+        }
+
+        let clean = task("Clean flat", personal, priority: 0, done: false, sortIndex: 0, desc: "deep clean")
+        _ = task("Vacuum", personal, priority: 1, done: false, parent: clean, sortIndex: 0)
+        _ = task("Dishes", personal, priority: 2, done: true, parent: clean, sortIndex: 1)
+        _ = task("Dentist", personal, priority: 0, done: true, sortIndex: 1)
+        _ = task("Ship release", work, priority: 0, done: false, sortIndex: 0, desc: "v2")
+        _ = task("Email client", work, priority: 2, done: false, sortIndex: 1)
+        try f.save()
     }
 
-    // MARK: - Online backup produces a complete self-contained snapshot (#18)
-    //
-    // Exercises the real shipping helper (BackupManager.sqliteOnlineBackup). The
-    // store is WAL-mode and held open, so recent writes (completion/priority
-    // toggles) live in the -wal, not the base .store; a plain file copy missed
-    // them. The online backup must capture the full state. Here we write rows
-    // through an OPEN WAL-mode connection (so they're WAL-resident) and confirm
-    // the snapshot contains them with exact values.
+    // MARK: - Round-trip integrity
 
-    @Test func onlineBackupCapturesAllRowsIncludingWALResident() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+    @Test func backupThenRestorePreservesAllData() throws {
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        let before = try snapshot(f)
+        #expect(before.count == 6)
 
-        let src = dir.appendingPathComponent("live.store")
-        let dest = dir.appendingPathComponent("backup.store")
+        let backup = try #require(f.manager.createBackup(label: "snap"))
 
-        // Populate a WAL-mode DB and keep the connection OPEN so rows are still in
-        // the -wal when we snapshot.
-        var live: OpaquePointer?
-        try #require(sqlite3_open(src.path, &live) == SQLITE_OK)
-        defer { sqlite3_close(live) }
-        try #require(sqlite3_exec(live, "PRAGMA journal_mode=WAL;", nil, nil, nil) == SQLITE_OK)
-        try #require(sqlite3_exec(live, "PRAGMA wal_autocheckpoint=0;", nil, nil, nil) == SQLITE_OK)
-        try #require(sqlite3_exec(live, "CREATE TABLE T(id INTEGER PRIMARY KEY, done INT, prio INT);", nil, nil, nil) == SQLITE_OK)
-        try #require(sqlite3_exec(live, "INSERT INTO T VALUES (1,1,0),(2,0,2),(3,1,1);", nil, nil, nil) == SQLITE_OK)
+        // Mutate destructively: flip completion + priority, delete a task, rename.
+        let all = try f.tasks()
+        let toEdit = try #require(all.first { $0.plainTitle == "Ship release" })
+        toEdit.setDone(true)
+        toEdit.priority = 2
+        let toDelete = try #require(all.first { $0.plainTitle == "Email client" })
+        f.context.delete(toDelete)
+        try f.save()
+        #expect(try f.tasks().count == 5)
 
-        // Snapshot via the real implementation.
-        #expect(BackupManager.sqliteOnlineBackup(from: src, to: dest))
+        try f.manager.restore(backup: backup)
 
-        // The snapshot must contain all rows with exact done/prio values. Open
-        // read-write (as the app does via ModelContainer) so SQLite can materialize
-        // any journal it needs to read the file.
-        var verify: OpaquePointer?
-        try #require(sqlite3_open_v2(dest.path, &verify, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK)
-        defer { sqlite3_close(verify) }
-        var stmt: OpaquePointer?
-        try #require(sqlite3_prepare_v2(verify, "SELECT COUNT(*), SUM(done), SUM(prio) FROM T;", -1, &stmt, nil) == SQLITE_OK)
-        defer { sqlite3_finalize(stmt) }
-        try #require(sqlite3_step(stmt) == SQLITE_ROW)
-        #expect(sqlite3_column_int(stmt, 0) == 3) // all rows present
-        #expect(sqlite3_column_int(stmt, 1) == 2) // completion preserved
-        #expect(sqlite3_column_int(stmt, 2) == 3) // priorities preserved
+        // Every task and field must match the pre-backup state exactly.
+        let after = try snapshot(f)
+        #expect(after == before)
+    }
+
+    @Test func restorePreservesPriorityAndCompletion() throws {
+        // Directly targets the #18 regression: critical priority and completed
+        // flags must survive a restore.
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        let backup = try #require(f.manager.createBackup())
+
+        // Wipe priorities/completion in the live store.
+        for t in try f.tasks() { t.priority = 1; t.isDone = false; t.completedAt = nil }
+        try f.save()
+        #expect(try f.tasks().allSatisfy { $0.priority == 1 && !$0.isDone })
+
+        try f.manager.restore(backup: backup)
+
+        let restored = try f.tasks()
+        #expect(restored.filter { $0.priority == 0 }.count == 3) // critical preserved
+        #expect(restored.filter { $0.isDone }.count == 2)        // completion preserved
+        #expect(restored.filter { $0.completedAt != nil }.count == 2)
+    }
+
+    @Test func restorePreservesSubtaskHierarchy() throws {
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        let backup = try #require(f.manager.createBackup())
+
+        for t in try f.tasks() { f.context.delete(t) }
+        try f.save()
+        #expect(try f.tasks().isEmpty)
+
+        try f.manager.restore(backup: backup)
+
+        let tasks = try f.tasks()
+        let clean = try #require(tasks.first { $0.plainTitle == "Clean flat" })
+        #expect(clean.subtasks.count == 2)
+        #expect(Set(clean.subtasks.map(\.plainTitle)) == ["Vacuum", "Dishes"])
+        // Inverse side hydrates too: the project lists its root tasks.
+        let personal = try #require(try f.projects().first { $0.title == "Personal" })
+        #expect(personal.tasks.filter { $0.parent == nil }.count == 2)
+    }
+
+    @Test func restoreReplacesNewerDataEntirely() throws {
+        // Restoring must REPLACE current data, not merge: tasks added after the
+        // backup are gone afterward.
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        let backup = try #require(f.manager.createBackup())
+
+        let extra = Task(plainTitle: "Added later", project: try f.projects().first!)
+        f.context.insert(extra)
+        try f.save()
+        #expect(try f.tasks().count == 7)
+
+        try f.manager.restore(backup: backup)
+        #expect(try f.tasks().count == 6)
+        #expect(try f.tasks().contains { $0.plainTitle == "Added later" } == false)
+    }
+
+    // MARK: - Backup management
+
+    @Test func restoreCreatesSingleRollingPreRestoreBackup() throws {
+        // #16: each restore keeps exactly one "before restore" safety backup.
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        let backup = try #require(f.manager.createBackup())
+
+        try f.manager.restore(backup: backup)
+        #expect(f.manager.preRestoreBackups.count == 1)
+        try f.manager.restore(backup: backup)
+        #expect(f.manager.preRestoreBackups.count == 1) // replaced, not accumulated
+    }
+
+    @Test func createBackupAppearsInList() throws {
+        let f = try Fixture(); defer { f.cleanup() }
+        try seed(f)
+        #expect(f.manager.manualBackups.isEmpty)
+        _ = try #require(f.manager.createBackup(label: "first"))
+        #expect(f.manager.manualBackups.count == 1)
     }
 }

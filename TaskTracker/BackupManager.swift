@@ -24,6 +24,7 @@ struct Backup: Identifiable, Comparable {
 final class BackupManager {
     private let storeURL: URL
     private let backupDir: URL
+    private let defaults: UserDefaults
     /// The live model container. Restore mutates this directly so the UI updates
     /// in place — the same proven path the sample seeder uses — instead of swapping
     /// the store file or relaunching. Set by the app after construction.
@@ -51,7 +52,7 @@ final class BackupManager {
     /// How often to auto-back-up, in hours. 0 = off. Persisted in UserDefaults.
     var autoBackupIntervalHours: Int {
         didSet {
-            UserDefaults.standard.set(autoBackupIntervalHours, forKey: Self.intervalDefaultsKey)
+            defaults.set(autoBackupIntervalHours, forKey: Self.intervalDefaultsKey)
             scheduleTimer()
         }
     }
@@ -60,15 +61,24 @@ final class BackupManager {
     var manualBackups:     [Backup] { backups.filter { $0.kind == .manual     } }
     var preRestoreBackups: [Backup] { backups.filter { $0.kind == .preRestore } }
 
-    init(storeURL: URL) {
+    /// - Parameters:
+    ///   - storeURL: the SwiftData store to back up / restore into.
+    ///   - backupDir: where backup files live. Defaults to the production location;
+    ///     tests pass a temporary directory so they never touch production data.
+    ///   - defaults: the UserDefaults used for the auto-backup interval. Tests pass
+    ///     an isolated suite so they don't read or pollute production preferences.
+    init(storeURL: URL,
+         backupDir: URL = URL.applicationSupportDirectory
+            .appending(component: "TaskTrackerBackups", directoryHint: .isDirectory),
+         defaults: UserDefaults = .standard) {
         self.storeURL = storeURL
-        self.backupDir = URL.applicationSupportDirectory
-            .appending(component: "TaskTrackerBackups", directoryHint: .isDirectory)
+        self.backupDir = backupDir
+        self.defaults = defaults
         // Default to daily (24h) on first run if nothing stored yet.
-        if UserDefaults.standard.object(forKey: Self.intervalDefaultsKey) == nil {
+        if defaults.object(forKey: Self.intervalDefaultsKey) == nil {
             self.autoBackupIntervalHours = 24
         } else {
-            self.autoBackupIntervalHours = UserDefaults.standard.integer(forKey: Self.intervalDefaultsKey)
+            self.autoBackupIntervalHours = defaults.integer(forKey: Self.intervalDefaultsKey)
         }
         try? FileManager.default.createDirectory(at: backupDir, withIntermediateDirectories: true)
         refresh()
@@ -132,7 +142,7 @@ final class BackupManager {
 
     /// Parses the "yyyy-MM-dd HH-mm-ss" timestamp out of a backup filename stem
     /// like "auto-2026-06-06 14-30-00 optional label".
-    static func date(fromStem stem: String) -> Date? {
+    private static func date(fromStem stem: String) -> Date? {
         let withoutKind = stem.replacingOccurrences(
             of: "^(auto|manual|prerestore)-", with: "", options: .regularExpression)
         // The timestamp is the first two space-separated fields ("date time").
@@ -167,7 +177,7 @@ final class BackupManager {
     /// Copies a live (possibly open, WAL-mode) SQLite database into `dest` as a
     /// single consistent, self-contained file using SQLite's online backup API.
     /// Returns true on success.
-    static func sqliteOnlineBackup(from src: URL, to dest: URL) -> Bool {
+    private static func sqliteOnlineBackup(from src: URL, to dest: URL) -> Bool {
         try? FileManager.default.removeItem(at: dest)
 
         var srcDB: OpaquePointer?
