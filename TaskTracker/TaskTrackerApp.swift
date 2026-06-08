@@ -86,6 +86,8 @@ struct TaskTrackerApp: App {
                 }
             }
             CommandGroup(replacing: .help) {
+                Button("Export All Data (JSON)…") { exportData() }
+                Button("Import Data (JSON)…") { importData() }
                 Button("Export Diagnostics…") { exportDiagnostics() }
             }
         }
@@ -115,6 +117,70 @@ struct TaskTrackerApp: App {
         panel.title = "Export Diagnostics"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? DiagnosticLog.shared.exportText().write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Exports all projects and tasks to a user-chosen JSON file — a portable,
+    /// human-readable copy of everything in the app. Read-only; never mutates data.
+    private func exportData() {
+        guard let data = try? DataExport.json(from: container.mainContext) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        let stamp = ISO8601DateFormatter().string(from: Date()).prefix(10) // yyyy-MM-dd
+        panel.nameFieldStringValue = "Quillpoint-data-\(stamp).json"
+        panel.title = "Export All Data"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Imports a JSON export. Validates first (a bad file changes nothing), asks the
+    /// user whether to merge or replace, takes a safety backup, then applies. The
+    /// destructive parts only run after explicit confirmation.
+    private func importData() {
+        let open = NSOpenPanel()
+        open.allowedContentTypes = [.json]
+        open.allowsMultipleSelection = false
+        open.title = "Import Data"
+        guard open.runModal() == .OK, let url = open.url else { return }
+
+        guard let data = try? Data(contentsOf: url) else {
+            return showImportError(DataExport.ImportError.unreadable)
+        }
+
+        // Validate before touching anything.
+        let counts: (projects: Int, tasks: Int)
+        do { counts = try DataExport.validate(data) }
+        catch { return showImportError(error) }
+
+        // Ask: merge or replace (or cancel).
+        let alert = NSAlert()
+        alert.messageText = "Import \(counts.projects) project\(counts.projects == 1 ? "" : "s") and \(counts.tasks) task\(counts.tasks == 1 ? "" : "s")?"
+        alert.informativeText = "Merge adds the imported items alongside your current data. Replace removes all current data first. A backup is taken either way."
+        alert.addButton(withTitle: "Merge")        // .alertFirstButtonReturn
+        alert.addButton(withTitle: "Replace All")  // .alertSecondButtonReturn
+        alert.addButton(withTitle: "Cancel")       // .alertThirdButtonReturn
+        let choice = alert.runModal()
+        let mode: DataExport.ImportMode
+        switch choice {
+        case .alertFirstButtonReturn:  mode = .merge
+        case .alertSecondButtonReturn: mode = .replace
+        default: return // cancel
+        }
+
+        // Safety backup before any change, then apply.
+        backupManager.createBackup(label: "before import", kind: .manual)
+        do {
+            try DataExport.importing(data, into: container.mainContext, mode: mode)
+        } catch {
+            showImportError(error)
+        }
+    }
+
+    private func showImportError(_ error: Error) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Import Failed"
+        alert.informativeText = error.localizedDescription
+        alert.runModal()
     }
 
     private func setApplicationIcon() {
