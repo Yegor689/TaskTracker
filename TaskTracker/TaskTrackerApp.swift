@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 @main
 struct TaskTrackerApp: App {
@@ -84,6 +85,9 @@ struct TaskTrackerApp: App {
                     NotificationCenter.default.post(name: .showBackups, object: nil)
                 }
             }
+            CommandGroup(replacing: .help) {
+                Button("Export Diagnostics…") { exportDiagnostics() }
+            }
         }
 
         Settings {
@@ -101,6 +105,18 @@ struct TaskTrackerApp: App {
     /// override the correct icon with a placeholder (the source of issue #10's
     /// recurrence). If the .icns can't be loaded we leave the system default in
     /// place rather than risk replacing it with something worse.
+    /// Writes the diagnostic action log to a user-chosen .txt file so it can be
+    /// attached to a bug report. The log holds only structural facts (operation
+    /// names, short ids, counts) — no task titles or descriptions.
+    private func exportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "Quillpoint-diagnostics.txt"
+        panel.title = "Export Diagnostics"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? DiagnosticLog.shared.exportText().write(to: url, atomically: true, encoding: .utf8)
+    }
+
     private func setApplicationIcon() {
         guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
               let icon = NSImage(contentsOf: url) else { return }

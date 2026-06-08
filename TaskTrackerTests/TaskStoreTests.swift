@@ -16,17 +16,21 @@ struct TaskStoreTests {
         let container: ModelContainer
         let store: TaskStore
         let undoManager = UndoManager()
+        let diagnostics = DiagnosticLog()
 
         init() throws {
             let schema = Schema([Project.self, Task.self])
             container = try ModelContainer(
                 for: schema,
                 configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
-            store = TaskStore(context: container.mainContext)
+            store = TaskStore(context: container.mainContext, diagnostics: diagnostics)
             store.undoManager = undoManager
         }
 
         var context: ModelContext { container.mainContext }
+
+        /// Entries flagged as invariant violations (the "vanished task" tripwire).
+        var violations: [String] { diagnostics.entries.filter { $0.contains("INVARIANT") } }
     }
 
     /// Seeds two projects; Personal has one root task ("Clean") with two subtasks,
@@ -100,5 +104,41 @@ struct TaskStoreTests {
         // Moving to the project it's already in is a no-op.
         f.store.moveTask(s.clean, to: s.personal)
         #expect(s.clean.project?.id == s.personal.id)
+    }
+
+    /// Reproduction for the reported edge case: moving a task that has subtasks
+    /// could leave it reachable from no project (removed from the old, absent from
+    /// the new). Persists and RE-FETCHES from the store between the move and the
+    /// assertions — what the live UI's @Query does — and checks via fresh project
+    /// membership rather than the in-memory object graph, plus the diagnostic
+    /// invariant tripwire.
+    @Test func moveTaskWithSubtasksAppearsInNewProjectAfterSaveAndRefetch() throws {
+        let f = try Fixture()
+        let s = seed(f)
+        let cleanID = s.clean.id, personalID = s.personal.id, workID = s.work.id
+        try f.context.save()
+
+        f.store.moveTask(s.clean, to: s.work)
+        try f.context.save()
+
+        // Re-fetch everything fresh from the store, ignoring the in-memory graph.
+        let projects = try f.context.fetch(FetchDescriptor<Project>())
+        let work = try #require(projects.first { $0.id == workID })
+        let personal = try #require(projects.first { $0.id == personalID })
+
+        // The moved tree is present in Work and gone from Personal.
+        #expect(work.tasks.contains { $0.id == cleanID })
+        #expect(work.tasks.filter { $0.parent == nil }.contains { $0.id == cleanID })
+        #expect(personal.tasks.isEmpty)
+
+        // Every task is reachable from exactly one project — nothing vanished.
+        let allTasks = try f.context.fetch(FetchDescriptor<Task>())
+        let listed = Set(projects.flatMap { $0.tasks }.map(\.id))
+        for task in allTasks {
+            #expect(listed.contains(task.id), "task \(task.id) is in no project (vanished)")
+        }
+
+        // The diagnostic tripwire logged no membership violations.
+        #expect(f.violations.isEmpty, "unexpected invariant violations: \(f.violations)")
     }
 }

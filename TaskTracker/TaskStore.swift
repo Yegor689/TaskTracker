@@ -28,10 +28,15 @@ final class TaskStore {
     private let context: ModelContext
     var undoManager: UndoManager?
     var reminderManager: ReminderManager?
+    private let diagnostics: DiagnosticLog
 
-    init(context: ModelContext) {
+    init(context: ModelContext, diagnostics: DiagnosticLog = .shared) {
         self.context = context
+        self.diagnostics = diagnostics
     }
+
+    /// First 8 chars of a UUID — compact, correlatable id for the diagnostic log.
+    fileprivate static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)) }
 
     /// One-time backfill: existing data has all sortIndex == 0. If a project's
     /// root tasks (or any task's subtasks) all share index 0, assign sequential
@@ -208,12 +213,20 @@ final class TaskStore {
         else { return }
 
         let oldSortIndex = task.sortIndex
+        // Snapshot the subtasks into a plain array BEFORE mutating any project
+        // relationship. task.subtasks is a live SwiftData relationship; reassigning
+        // a subtask's project below maintains inverse relationships that can mutate
+        // this very collection mid-iteration, which could skip subtasks and leave
+        // them reachable from no project (the "vanished task" report).
+        let subtasks = Array(task.subtasks)
+        diagnostics.record("moveTask",
+            "task=\(Self.short(task.id)) from=\(Self.short(oldProject.id)) to=\(Self.short(newProject.id)) subtasks=\(subtasks.count)")
 
         // Detach from the old project's root list…
         oldProject.tasks.removeAll { $0.id == task.id }
         // …and reassign the task plus every subtask to the new project (both sides).
         reassignProject(task, to: newProject)
-        for subtask in task.subtasks {
+        for subtask in subtasks {
             oldProject.tasks.removeAll { $0.id == subtask.id }
             reassignProject(subtask, to: newProject)
         }
@@ -222,6 +235,7 @@ final class TaskStore {
         task.sortIndex = (Self.orderedRoots(of: newProject).filter { $0.id != task.id }.map(\.sortIndex).max() ?? -1) + 1
         reindex(Self.orderedRoots(of: newProject))
         reindex(Self.orderedRoots(of: oldProject))
+        diagnostics.checkProjectMembership(in: context, after: "moveTask")
 
         undoManager?.registerUndo(withTarget: self) { [weak oldProject] store in
             guard let oldProject else { return }
@@ -235,9 +249,12 @@ final class TaskStore {
     /// re-seats it at its previous position among that project's roots.
     private func moveTaskBack(_ task: Task, to project: Project, restoringSortIndex: Int) {
         guard let current = task.project, current.id != project.id else { return }
+        let subtasks = Array(task.subtasks) // snapshot before mutating relationships
+        diagnostics.record("moveTaskBack",
+            "task=\(Self.short(task.id)) from=\(Self.short(current.id)) to=\(Self.short(project.id)) subtasks=\(subtasks.count)")
         current.tasks.removeAll { $0.id == task.id }
         reassignProject(task, to: project)
-        for subtask in task.subtasks {
+        for subtask in subtasks {
             current.tasks.removeAll { $0.id == subtask.id }
             reassignProject(subtask, to: project)
         }
@@ -246,6 +263,7 @@ final class TaskStore {
         roots.insert(task, at: insertAt)
         reindex(roots)
         reindex(Self.orderedRoots(of: current))
+        diagnostics.checkProjectMembership(in: context, after: "moveTaskBack")
 
         undoManager?.registerUndo(withTarget: self) { store in
             store.moveTask(task, to: current)
