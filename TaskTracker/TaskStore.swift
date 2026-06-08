@@ -213,21 +213,17 @@ final class TaskStore {
         else { return }
 
         let oldSortIndex = task.sortIndex
-        // Snapshot the subtasks into a plain array BEFORE mutating any project
-        // relationship. task.subtasks is a live SwiftData relationship; reassigning
-        // a subtask's project below maintains inverse relationships that can mutate
-        // this very collection mid-iteration, which could skip subtasks and leave
-        // them reachable from no project (the "vanished task" report).
+        // Snapshot subtasks before reassigning — assigning a subtask's project
+        // mutates the live relationship collections.
         let subtasks = Array(task.subtasks)
         diagnostics.record("moveTask",
             "task=\(Self.short(task.id)) from=\(Self.short(oldProject.id)) to=\(Self.short(newProject.id)) subtasks=\(subtasks.count)")
 
-        // Detach from the old project's root list…
-        oldProject.tasks.removeAll { $0.id == task.id }
-        // …and reassign the task plus every subtask to the new project (both sides).
+        // Reassign by setting only the to-one `project` side. With the explicit
+        // inverse on Project.tasks, SwiftData maintains both projects' `tasks`
+        // arrays; manual array surgery here would double-write and corrupt it.
         reassignProject(task, to: newProject)
         for subtask in subtasks {
-            oldProject.tasks.removeAll { $0.id == subtask.id }
             reassignProject(subtask, to: newProject)
         }
 
@@ -252,10 +248,9 @@ final class TaskStore {
         let subtasks = Array(task.subtasks) // snapshot before mutating relationships
         diagnostics.record("moveTaskBack",
             "task=\(Self.short(task.id)) from=\(Self.short(current.id)) to=\(Self.short(project.id)) subtasks=\(subtasks.count)")
-        current.tasks.removeAll { $0.id == task.id }
+        // Set only the to-one side; the explicit inverse maintains both projects' tasks.
         reassignProject(task, to: project)
         for subtask in subtasks {
-            current.tasks.removeAll { $0.id == subtask.id }
             reassignProject(subtask, to: project)
         }
         var roots = Self.orderedRoots(of: project).filter { $0.id != task.id }
@@ -271,12 +266,11 @@ final class TaskStore {
         }
     }
 
-    /// Sets a task's project on both relationship sides.
+    /// Reassigns a task's project by setting only the to-one `project` side. With
+    /// the explicit inverse declared on Project.tasks, SwiftData maintains both the
+    /// old and new project's `tasks` arrays automatically.
     private func reassignProject(_ task: Task, to project: Project) {
         task.project = project
-        if !project.tasks.contains(where: { $0.id == task.id }) {
-            project.tasks.append(task)
-        }
     }
 
     @discardableResult
