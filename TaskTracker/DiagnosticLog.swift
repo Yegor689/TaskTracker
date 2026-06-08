@@ -65,6 +65,11 @@ final class DiagnosticLog {
     /// exactly one project's `tasks` collection. A task reachable from zero
     /// projects is the "vanished" bug; from more than one is double-listing.
     /// Logs a violation for each offender. `context` labels the call site.
+    ///
+    /// This only reads `id` on freshly fetched objects and the `tasks` collections —
+    /// it deliberately never dereferences a task's `project` relationship, which can
+    /// point at a deleted/invalidated model and trap fatally (the very crash this
+    /// check must not cause).
     @MainActor
     func checkProjectMembership(in modelContext: ModelContext, after context: String) {
         guard let projects = try? modelContext.fetch(FetchDescriptor<Project>()),
@@ -80,7 +85,7 @@ final class DiagnosticLog {
         for task in tasks {
             let count = listings[task.id] ?? 0
             if count != 1 {
-                violation("after=\(context) task=\(short(task.id)) listedInProjects=\(count) project=\(task.project.map { short($0.id) } ?? "nil")")
+                violation("after=\(context) task=\(short(task.id)) listedInProjects=\(count)")
             }
         }
     }
