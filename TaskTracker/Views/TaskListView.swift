@@ -271,6 +271,7 @@ struct TaskRowView: View {
     @Bindable var task: Task
     var isSubtask: Bool
     @Environment(TaskStore.self) private var taskStore
+    @Query(sort: \Project.title) private var projects: [Project]
     @Binding var focusedID: UUID?
     var onReturn:        () -> Void
     var onReturnAtStart: () -> Void = {}
@@ -486,6 +487,17 @@ struct TaskRowView: View {
             Picker("Priority", selection: $task.priorityLevel) {
                 ForEach(Priority.allCases) { level in
                     Label(level.label, systemImage: level.iconName).tag(level)
+                }
+            }
+            // Only root tasks move between projects; subtasks follow their parent.
+            if !isSubtask {
+                let destinations = projects.filter { $0.id != task.project?.id }
+                if !destinations.isEmpty {
+                    Menu("Move to") {
+                        ForEach(destinations) { project in
+                            Button(project.title) { taskStore.moveTask(task, to: project) }
+                        }
+                    }
                 }
             }
             Divider()

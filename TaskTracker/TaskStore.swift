@@ -193,6 +193,74 @@ final class TaskStore {
         undoManager?.setActionName("Move Task")
     }
 
+    // MARK: - Move across projects
+
+    /// Moves a root `task` (and its subtasks) from its current project to
+    /// `newProject` — used by the row's "Move to" menu. Subtasks follow their
+    /// parent: they stay attached via `parent`, but their `project` FK is reassigned
+    /// too so every task's project matches the list it now lives in. Placed at the
+    /// end of the new project's roots. No-op if the task isn't a root, has no current
+    /// project, or is already in `newProject`. Undoable.
+    func moveTask(_ task: Task, to newProject: Project) {
+        guard task.parent == nil,
+              let oldProject = task.project,
+              oldProject.id != newProject.id
+        else { return }
+
+        let oldSortIndex = task.sortIndex
+
+        // Detach from the old project's root list…
+        oldProject.tasks.removeAll { $0.id == task.id }
+        // …and reassign the task plus every subtask to the new project (both sides).
+        reassignProject(task, to: newProject)
+        for subtask in task.subtasks {
+            oldProject.tasks.removeAll { $0.id == subtask.id }
+            reassignProject(subtask, to: newProject)
+        }
+
+        // Place at the end of the new project's roots; renumber both projects.
+        task.sortIndex = (Self.orderedRoots(of: newProject).filter { $0.id != task.id }.map(\.sortIndex).max() ?? -1) + 1
+        reindex(Self.orderedRoots(of: newProject))
+        reindex(Self.orderedRoots(of: oldProject))
+
+        undoManager?.registerUndo(withTarget: self) { [weak oldProject] store in
+            guard let oldProject else { return }
+            store.moveTaskBack(task, to: oldProject, restoringSortIndex: oldSortIndex)
+            store.undoManager?.setActionName("Move Task to Project")
+        }
+        undoManager?.setActionName("Move Task to Project")
+    }
+
+    /// Undo counterpart to moveTask: returns `task` (and subtasks) to `project` and
+    /// re-seats it at its previous position among that project's roots.
+    private func moveTaskBack(_ task: Task, to project: Project, restoringSortIndex: Int) {
+        guard let current = task.project, current.id != project.id else { return }
+        current.tasks.removeAll { $0.id == task.id }
+        reassignProject(task, to: project)
+        for subtask in task.subtasks {
+            current.tasks.removeAll { $0.id == subtask.id }
+            reassignProject(subtask, to: project)
+        }
+        var roots = Self.orderedRoots(of: project).filter { $0.id != task.id }
+        let insertAt = min(restoringSortIndex, roots.count)
+        roots.insert(task, at: insertAt)
+        reindex(roots)
+        reindex(Self.orderedRoots(of: current))
+
+        undoManager?.registerUndo(withTarget: self) { store in
+            store.moveTask(task, to: current)
+            store.undoManager?.setActionName("Move Task to Project")
+        }
+    }
+
+    /// Sets a task's project on both relationship sides.
+    private func reassignProject(_ task: Task, to project: Project) {
+        task.project = project
+        if !project.tasks.contains(where: { $0.id == task.id }) {
+            project.tasks.append(task)
+        }
+    }
+
     @discardableResult
     func addSubtask(plainTitle: String = "", priority: Int = 1, to parent: Task, after afterSubtask: Task? = nil) -> Task {
         let subtask = Task(plainTitle: plainTitle, priority: priority, project: parent.project, parent: parent)
