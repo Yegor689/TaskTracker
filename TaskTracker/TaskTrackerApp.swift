@@ -80,12 +80,12 @@ struct TaskTrackerApp: App {
         .defaultSize(width: 960, height: 620)
         .modelContainer(container)
         .commands {
+            // App (Quillpoint) menu: backups, data export/import, and diagnostics.
             CommandGroup(after: .appSettings) {
                 Button("Backups…") {
                     NotificationCenter.default.post(name: .showBackups, object: nil)
                 }
-            }
-            CommandGroup(replacing: .help) {
+                Divider()
                 Button("Export All Data (JSON)…") { exportData() }
                 Button("Import Data (JSON)…") { importData() }
                 Button("Export Diagnostics…") { exportDiagnostics() }
