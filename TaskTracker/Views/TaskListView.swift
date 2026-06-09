@@ -113,7 +113,8 @@ struct TaskListView: View {
                                 subtaskGesture: { parent, sub in
                                     dragEnabled ? drag.subtaskGesture(for: sub, parent: parent, store: taskStore) : nil
                                 }
-                            )
+                            ),
+                            subtaskFilter: { filter.matches($0) }
                         )
                         .overlay {
                             // Highlight the row the dragged task would nest under.
@@ -290,6 +291,10 @@ struct TaskRowView: View {
     /// When set, shows a small pill with the task's project name (used in the
     /// All Projects view when grouped by priority, where project context is lost).
     var showProjectBadge: Bool = false
+    /// Which subtasks to display, so subtask rows honor the active list filter the
+    /// same way root tasks do (e.g. the Active filter hides completed subtasks).
+    /// Defaults to showing every subtask.
+    var subtaskFilter: (Task) -> Bool = { _ in true }
 
     @Environment(ReminderManager.self) private var reminderManager
     @Environment(\.appAccent) private var appAccent
@@ -299,9 +304,12 @@ struct TaskRowView: View {
     private var isFocused: Bool { focusedID == task.id }
     private var subtaskFocused: Bool { sortedSubtasks.contains { $0.id == focusedID } }
     private var anyFocused: Bool     { isFocused || subtaskFocused }
-    // Same ordering as root tasks: manual order, with completed subtasks sunk to
-    // the bottom (newest completion on top of the done group).
-    private var sortedSubtasks: [Task] { task.subtasks.sorted(by: TaskListView.taskOrder) }
+    // Same ordering as root tasks: manual order, with completed subtasks sunk to the
+    // bottom (newest completion on top of the done group), filtered to those the
+    // current list filter shows.
+    private var sortedSubtasks: [Task] {
+        task.subtasks.filter(subtaskFilter).sorted(by: TaskListView.taskOrder)
+    }
 
     private var iconSize: CGFloat  { isSubtask ? 18 : 22 }
     private var titleFont: NSFont  { isSubtask ? .preferredFont(forTextStyle: .body) : .preferredFont(forTextStyle: .title3) }
