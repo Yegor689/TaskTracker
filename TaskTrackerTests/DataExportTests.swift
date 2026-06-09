@@ -52,7 +52,7 @@ struct DataExportTests {
     @Test func exportProducesValidJSONWithNestedSubtasks() throws {
         let s = try Store()
         try seed(s.context)
-        let data = try DataExport.json(from: s.context)
+        let data = try DataExportManager.json(from: s.context)
 
         let obj = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(obj["app"] as? String == "Quillpoint")
@@ -69,12 +69,12 @@ struct DataExportTests {
     }
 
     @Test func validateRejectsMalformedFile() throws {
-        #expect(throws: DataExport.ImportError.self) {
-            try DataExport.validate(Data("not json".utf8))
+        #expect(throws: DataExportManager.ImportError.self) {
+            try DataExportManager.validate(Data("not json".utf8))
         }
         // Valid JSON but not a Quillpoint document.
-        #expect(throws: DataExport.ImportError.self) {
-            try DataExport.validate(Data(#"{"app":"Other","formatVersion":1,"exportedAt":"2026-01-01T00:00:00Z","projects":[]}"#.utf8))
+        #expect(throws: DataExportManager.ImportError.self) {
+            try DataExportManager.validate(Data(#"{"app":"Other","formatVersion":1,"exportedAt":"2026-01-01T00:00:00Z","projects":[]}"#.utf8))
         }
     }
 
@@ -85,10 +85,10 @@ struct DataExportTests {
     @Test func roundTripReplacePreservesEverything() throws {
         let src = try Store()
         try seed(src.context)
-        let data = try DataExport.json(from: src.context)
+        let data = try DataExportManager.json(from: src.context)
 
         let dst = try Store()
-        try DataExport.importing(data, into: dst.context, mode: .replace)
+        try DataExportManager.importing(data, into: dst.context, mode: .replace)
 
         let projects = try dst.context.fetch(FetchDescriptor<Project>())
         #expect(projects.count == 2)
@@ -109,7 +109,7 @@ struct DataExportTests {
     @Test func replaceWipesExistingData() throws {
         let src = try Store()
         try seed(src.context)
-        let data = try DataExport.json(from: src.context)
+        let data = try DataExportManager.json(from: src.context)
 
         // Destination already has its own unrelated project.
         let dst = try Store()
@@ -119,7 +119,7 @@ struct DataExportTests {
         dst.context.insert(oldTask); old.tasks.append(oldTask)
         try dst.context.save()
 
-        try DataExport.importing(data, into: dst.context, mode: .replace)
+        try DataExportManager.importing(data, into: dst.context, mode: .replace)
 
         let projects = try dst.context.fetch(FetchDescriptor<Project>())
         #expect(projects.contains { $0.title == "Old Project" } == false) // wiped
@@ -129,14 +129,14 @@ struct DataExportTests {
     @Test func mergeAddsNewProjectsAlongsideExisting() throws {
         let src = try Store()
         try seed(src.context)
-        let data = try DataExport.json(from: src.context)
+        let data = try DataExportManager.json(from: src.context)
 
         let dst = try Store()
         let keep = Project(title: "Keep")
         dst.context.insert(keep)
         try dst.context.save()
 
-        try DataExport.importing(data, into: dst.context, mode: .merge)
+        try DataExportManager.importing(data, into: dst.context, mode: .merge)
 
         let projects = try dst.context.fetch(FetchDescriptor<Project>())
         #expect(Set(projects.map(\.title)) == ["Keep", "Personal", "Work"])
@@ -149,13 +149,13 @@ struct DataExportTests {
     @Test func mergeIsIdempotentOnReimport() throws {
         let store = try Store()
         try seed(store.context)
-        let data = try DataExport.json(from: store.context)
+        let data = try DataExportManager.json(from: store.context)
 
         let projectsBefore = try store.context.fetch(FetchDescriptor<Project>()).count
         let tasksBefore = try store.context.fetch(FetchDescriptor<Task>()).count
 
         // Import the store's own export back into itself — must add nothing.
-        try DataExport.importing(data, into: store.context, mode: .merge)
+        try DataExportManager.importing(data, into: store.context, mode: .merge)
 
         #expect(try store.context.fetch(FetchDescriptor<Project>()).count == projectsBefore)
         #expect(try store.context.fetch(FetchDescriptor<Task>()).count == tasksBefore)
@@ -170,11 +170,11 @@ struct DataExportTests {
         // already has, identical down to createdAt.
         let src = try Store()
         let (personal, _) = try seed(src.context)
-        let baseExport = try DataExport.json(from: src.context)
+        let baseExport = try DataExportManager.json(from: src.context)
 
         // Destination = a fresh store loaded from that base export (so fields match).
         let dst = try Store()
-        try DataExport.importing(baseExport, into: dst.context, mode: .replace)
+        try DataExportManager.importing(baseExport, into: dst.context, mode: .replace)
         let dstPersonalID = try #require(try dst.context.fetch(FetchDescriptor<Project>())
             .first { $0.title == "Personal" }).id
 
@@ -182,10 +182,10 @@ struct DataExportTests {
         let laundry = Task(plainTitle: "Laundry", project: personal)
         src.context.insert(laundry); personal.tasks.append(laundry); laundry.sortIndex = 1
         try src.context.save()
-        let supersetExport = try DataExport.json(from: src.context)
+        let supersetExport = try DataExportManager.json(from: src.context)
 
         // Merge the superset into the destination.
-        try DataExport.importing(supersetExport, into: dst.context, mode: .merge)
+        try DataExportManager.importing(supersetExport, into: dst.context, mode: .merge)
 
         let projects = try dst.context.fetch(FetchDescriptor<Project>())
         // Personal reused (same id), not duplicated.

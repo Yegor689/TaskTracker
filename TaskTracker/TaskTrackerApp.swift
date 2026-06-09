@@ -122,7 +122,7 @@ struct TaskTrackerApp: App {
     /// Exports all projects and tasks to a user-chosen JSON file — a portable,
     /// human-readable copy of everything in the app. Read-only; never mutates data.
     private func exportData() {
-        guard let data = try? DataExport.json(from: container.mainContext) else { return }
+        guard let data = try? DataExportManager.json(from: container.mainContext) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         let stamp = ISO8601DateFormatter().string(from: Date()).prefix(10) // yyyy-MM-dd
@@ -143,12 +143,12 @@ struct TaskTrackerApp: App {
         guard open.runModal() == .OK, let url = open.url else { return }
 
         guard let data = try? Data(contentsOf: url) else {
-            return showImportError(DataExport.ImportError.unreadable)
+            return showImportError(DataExportManager.ImportError.unreadable)
         }
 
         // Validate before touching anything.
         let counts: (projects: Int, tasks: Int)
-        do { counts = try DataExport.validate(data) }
+        do { counts = try DataExportManager.validate(data) }
         catch { return showImportError(error) }
 
         // Ask: merge or replace (or cancel).
@@ -159,7 +159,7 @@ struct TaskTrackerApp: App {
         alert.addButton(withTitle: "Replace All")  // .alertSecondButtonReturn
         alert.addButton(withTitle: "Cancel")       // .alertThirdButtonReturn
         let choice = alert.runModal()
-        let mode: DataExport.ImportMode
+        let mode: DataExportManager.ImportMode
         switch choice {
         case .alertFirstButtonReturn:  mode = .merge
         case .alertSecondButtonReturn: mode = .replace
@@ -169,7 +169,7 @@ struct TaskTrackerApp: App {
         // Safety backup before any change, then apply.
         backupManager.createBackup(label: "before import", kind: .manual)
         do {
-            try DataExport.importing(data, into: container.mainContext, mode: mode)
+            try DataExportManager.importing(data, into: container.mainContext, mode: mode)
         } catch {
             showImportError(error)
         }
