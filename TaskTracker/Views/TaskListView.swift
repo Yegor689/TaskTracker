@@ -338,6 +338,7 @@ struct TaskRowView: View {
                             rtf: $task.titleRTF,
                             font: titleFont,
                             isFocused: isFocused,
+                            isDone: task.isDone,
                             onFocus:         { focusedID = task.id },
                             onReturn:        onReturn,
                             onReturnAtStart: onReturnAtStart,

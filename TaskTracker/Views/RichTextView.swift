@@ -7,6 +7,10 @@ struct RichTitleField: NSViewRepresentable {
     @Binding var rtf: Data
     var font: NSFont = .preferredFont(forTextStyle: .title3)
     var isFocused: Bool
+    /// When true (and not being edited), the title is shown struck-through and
+    /// dimmed. This is a DISPLAY-ONLY overlay (layout-manager temporary attributes);
+    /// the stored RTF is never modified, and editing clears it.
+    var isDone: Bool = false
     var onFocus: () -> Void
     var onReturn: () -> Void
     /// Enter pressed with caret at the very start: insert a new task before this one.
@@ -89,6 +93,12 @@ struct RichTitleField: NSViewRepresentable {
                 context.coordinator.isUpdating = false
                 tv.invalidateIntrinsicContentSize()
             }
+            // Show completed titles struck-through + dimmed, as a display-only
+            // overlay that leaves the stored RTF untouched.
+            tv.setCompletedAppearance(isDone)
+        } else {
+            // While editing, never show the completed styling — edit normally.
+            tv.setCompletedAppearance(false)
         }
 
         if isFocused {
@@ -327,6 +337,34 @@ class RichInlineTextView: NSTextView {
         if result && empty && !deletionHandled { actions?.onBlurIfEmpty() }
         deletionHandled = false
         return result
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        // Clear the completed overlay the moment editing starts so the user edits the
+        // normal title; updateNSView re-applies it after editing ends if still done.
+        setCompletedAppearance(false)
+        return super.becomeFirstResponder()
+    }
+
+    /// Applies or removes a DISPLAY-ONLY strikethrough + dimmed color over the whole
+    /// title using the layout manager's temporary attributes. Temporary attributes
+    /// affect rendering only — the text storage (and thus the stored RTF) is never
+    /// modified, so toggling completion or editing leaves the saved title intact.
+    /// Idempotent: safe to call after every text update (it re-applies the overlay,
+    /// which a programmatic text reset would otherwise clear).
+    func setCompletedAppearance(_ done: Bool) {
+        guard let layoutManager, let textContainer else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        let range = NSRange(location: 0, length: (string as NSString).length)
+        guard range.length > 0 else { return }
+        if done {
+            layoutManager.setTemporaryAttributes([
+                .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                .foregroundColor: NSColor.secondaryLabelColor
+            ], forCharacterRange: range)
+        } else {
+            layoutManager.setTemporaryAttributes([:], forCharacterRange: range)
+        }
     }
 
     override var intrinsicContentSize: NSSize {
