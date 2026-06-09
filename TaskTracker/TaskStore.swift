@@ -284,6 +284,9 @@ final class TaskStore {
         let subtask = Task(plainTitle: plainTitle, priority: priority, project: parent.project, parent: parent)
         context.insert(subtask)
         parent.subtasks.append(subtask)
+        // The new subtask is incomplete, so a parent that was marked done is no longer
+        // fully done — re-derive its completion from its subtasks.
+        parent.syncDoneWithSubtasks()
 
         // Position the new subtask: right after `afterSubtask`, else at the end.
         var subs = Self.orderedSubtasks(of: parent).filter { $0.id != subtask.id }
@@ -350,9 +353,12 @@ final class TaskStore {
         reminderManager?.cancel(taskID: task.id)
         for subtask in task.subtasks { reminderManager?.cancel(taskID: subtask.id) }
 
+        let formerParent = task.parent
         task.parent?.subtasks.removeAll { $0.id == task.id }
         project.tasks.removeAll { $0.id == task.id }
         context.delete(task)
+        // Removing a subtask can change whether the parent is "all subtasks done".
+        formerParent?.syncDoneWithSubtasks()
 
         undoManager?.registerUndo(withTarget: self) { [weak project] store in
             guard let project else { return }
@@ -382,6 +388,9 @@ final class TaskStore {
         task.sortIndex = (Self.orderedRoots(of: project).filter { $0.id != task.id }.map(\.sortIndex).max() ?? -1) + 1
         reindex(Self.orderedRoots(of: project))
         reindex(Self.orderedSubtasks(of: parent))
+        // The promoted task is no longer a subtask, so re-derive the former parent's
+        // completion from whatever subtasks remain.
+        parent.syncDoneWithSubtasks()
     }
 
     private func restore(snapshot: TaskSnapshot, into project: Project, after afterTask: Task?, at createdAt: Date) {

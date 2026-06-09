@@ -120,6 +120,20 @@ class Task {
 
     func toggleDone() { setDone(!isDone) }
 
+    /// A parent task's completion is DERIVED from its subtasks: it's done exactly
+    /// when it has subtasks and they're all done. Tasks without subtasks keep their
+    /// own state. Call after a subtask's completion changes to keep the parent in
+    /// sync (completing the last subtask completes the parent; reopening one reopens
+    /// the parent).
+    func syncDoneWithSubtasks() {
+        guard !subtasks.isEmpty else { return }
+        setDone(subtasks.allSatisfy(\.isDone))
+    }
+
+    /// Whether this task's completion is controlled by its subtasks (so its own
+    /// checkbox shouldn't be directly toggleable).
+    var isDrivenBySubtasks: Bool { !subtasks.isEmpty }
+
     static func rtf(from plain: String, font: NSFont = .preferredFont(forTextStyle: .body)) -> Data {
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
         let attrStr = NSAttributedString(string: plain, attributes: attrs)

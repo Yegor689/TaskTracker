@@ -42,6 +42,9 @@ struct TaskDetailView: View {
                 // MARK: Status chips
                 HStack(spacing: 12) {
                     Button {
+                        // A task with subtasks has its completion driven by them, so
+                        // its own status isn't directly toggleable here.
+                        guard !task.isDrivenBySubtasks else { return }
                         withAnimation(.spring(duration: 0.25)) { task.toggleDone() }
                     } label: {
                         chip(
@@ -52,6 +55,8 @@ struct TaskDetailView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(task.isDrivenBySubtasks)
+                    .help(task.isDrivenBySubtasks ? "Completion is set by this task's subtasks" : "")
 
                     Button {
                         withAnimation(.spring(duration: 0.2)) {
@@ -222,7 +227,10 @@ struct TaskDetailView: View {
         NavigationLink(value: subtask) {
             HStack(spacing: 12) {
                 Button {
-                    withAnimation(.spring(duration: 0.25)) { subtask.toggleDone() }
+                    withAnimation(.spring(duration: 0.25)) {
+                        subtask.toggleDone()
+                        task.syncDoneWithSubtasks() // re-derive this parent's completion
+                    }
                 } label: {
                     Image(systemName: subtask.isDone ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(subtask.isDone ? .green : .secondary)

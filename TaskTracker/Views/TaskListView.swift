@@ -327,10 +327,11 @@ struct TaskRowView: View {
                         .foregroundStyle(task.isDone ? .green : (task.priorityLevel.isAccented ? task.priorityLevel.color : .secondary))
                         .font(.system(size: iconSize))
                         .frame(height: lineHeight)
+                        .opacity(task.isDrivenBySubtasks ? 0.5 : 1) // dimmed: state is derived
                         .contentShape(Rectangle())
                         .modifier(BulletGestureModifier(
                             dragGesture: dragGesture,
-                            onTap: { withAnimation(.spring(duration: 0.25)) { task.toggleDone() } }
+                            onTap: { toggleCompletion() }
                         ))
 
                     VStack(alignment: .leading, spacing: 1) {
@@ -505,6 +506,18 @@ struct TaskRowView: View {
             Button("Delete", role: .destructive, action: onDelete)
         }
         .onHover { isHovered = $0 }
+    }
+
+    /// Bullet tap. A parent with subtasks has its completion driven by them, so its
+    /// own bullet is a no-op. A subtask toggles itself, then re-derives its parent's
+    /// completion (completing the last subtask completes the parent; reopening one
+    /// reopens it).
+    private func toggleCompletion() {
+        guard !task.isDrivenBySubtasks else { return }
+        withAnimation(.spring(duration: 0.25)) {
+            task.toggleDone()
+            task.parent?.syncDoneWithSubtasks()
+        }
     }
 
     private func addSubtaskAfter(_ subtask: Task) {
