@@ -456,6 +456,7 @@ struct TaskRowView: View {
                             isSubtask: true,
                             focusedID: $focusedID,
                             onReturn:           { addSubtaskAfter(subtask) },
+                            onReturnAtStart:    { addSubtaskBefore(subtask) },
                             onDeleteIfEmpty:    { deleteSubtaskIfEmpty(subtask) },
                             onDelete:           { taskStore.deleteTask(subtask) },
                             onIndent:           { },
@@ -530,6 +531,13 @@ struct TaskRowView: View {
 
     private func addSubtaskAfter(_ subtask: Task) {
         let sub = taskStore.addSubtask(to: task, after: subtask)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.focusedID = sub.id
+        }
+    }
+
+    private func addSubtaskBefore(_ subtask: Task) {
+        let sub = taskStore.addSubtask(to: task, before: subtask)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.focusedID = sub.id
         }

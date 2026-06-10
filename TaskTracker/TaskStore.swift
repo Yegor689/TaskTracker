@@ -280,7 +280,7 @@ final class TaskStore {
     }
 
     @discardableResult
-    func addSubtask(plainTitle: String = "", priority: Int = 1, to parent: Task, after afterSubtask: Task? = nil) -> Task {
+    func addSubtask(plainTitle: String = "", priority: Int = 1, to parent: Task, after afterSubtask: Task? = nil, before beforeSubtask: Task? = nil) -> Task {
         let subtask = Task(plainTitle: plainTitle, priority: priority, project: parent.project, parent: parent)
         context.insert(subtask)
         parent.subtasks.append(subtask)
@@ -288,9 +288,12 @@ final class TaskStore {
         // fully done — re-derive its completion from its subtasks.
         parent.syncDoneWithSubtasks()
 
-        // Position the new subtask: right after `afterSubtask`, else at the end.
+        // Position the new subtask: before `beforeSubtask`, else right after
+        // `afterSubtask`, else at the end.
         var subs = Self.orderedSubtasks(of: parent).filter { $0.id != subtask.id }
-        if let after = afterSubtask, let idx = subs.firstIndex(where: { $0.id == after.id }) {
+        if let before = beforeSubtask, let idx = subs.firstIndex(where: { $0.id == before.id }) {
+            subs.insert(subtask, at: idx)
+        } else if let after = afterSubtask, let idx = subs.firstIndex(where: { $0.id == after.id }) {
             subs.insert(subtask, at: idx + 1)
         } else {
             subs.append(subtask)
