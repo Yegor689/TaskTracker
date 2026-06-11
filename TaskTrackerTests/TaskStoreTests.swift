@@ -6,26 +6,34 @@ import SwiftData
 /// Tests for TaskStore.moveTask — moving a root task (and its subtasks) between
 /// projects, as driven by the row's "Move to" menu. The data logic is what's
 /// risky here (subtask project FK reassignment, both relationship sides, undo),
-/// so these exercise it directly against an isolated in-memory store.
+/// so these exercise it directly against an isolated on-disk store.
 @MainActor
 struct TaskStoreTests {
 
-    /// An isolated in-memory SwiftData store with a TaskStore over it.
+    /// An isolated SwiftData store with a TaskStore over it. Uses a unique on-disk
+    /// store rather than isStoredInMemoryOnly — the latter SIGTRAPs on the current
+    /// macOS/Xcode 27 beta toolchain when several same-schema containers exist in
+    /// one test process (see DataExportTests / SubtaskCompletionTests).
     @MainActor
     final class Fixture {
         let container: ModelContainer
         let store: TaskStore
         let undoManager = UndoManager()
         let diagnostics = DiagnosticLog()
+        private let url: URL
 
         init() throws {
             let schema = Schema([Project.self, Task.self])
+            url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("TaskStoreTest-\(UUID().uuidString).store")
             container = try ModelContainer(
                 for: schema,
-                configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true))
+                configurations: ModelConfiguration(schema: schema, url: url))
             store = TaskStore(context: container.mainContext, diagnostics: diagnostics)
             store.undoManager = undoManager
         }
+
+        deinit { try? FileManager.default.removeItem(at: url) }
 
         var context: ModelContext { container.mainContext }
 
@@ -131,11 +139,23 @@ struct TaskStoreTests {
         #expect(work.tasks.filter { $0.parent == nil }.contains { $0.id == cleanID })
         #expect(personal.tasks.isEmpty)
 
-        // Every task is reachable from exactly one project — nothing vanished.
+        // Every task is reachable from exactly ONE project, listed exactly once —
+        // guards against both shapes of relationship corruption: a task reachable
+        // from no project (the reported "vanish") and a task double-listed in a
+        // project's `tasks`. NOTE: neither assertion was observed to fail against
+        // the old manual-array implementation in this single-context save/refetch
+        // geometry — the reported vanish was an intermittent in-vivo SwiftData
+        // faulting condition under the live @Query UI that this store-layer test
+        // does not deterministically reproduce. These remain as regression guards.
         let allTasks = try f.context.fetch(FetchDescriptor<Task>())
-        let listed = Set(projects.flatMap { $0.tasks }.map(\.id))
+        let listed = projects.flatMap { $0.tasks }.map(\.id)
+        let listedSet = Set(listed)
         for task in allTasks {
-            #expect(listed.contains(task.id), "task \(task.id) is in no project (vanished)")
+            #expect(listedSet.contains(task.id), "task \(task.id) is in no project (vanished)")
+        }
+        for project in projects {
+            let ids = project.tasks.map(\.id)
+            #expect(ids.count == Set(ids).count, "\(project.title) lists a task more than once: \(ids)")
         }
 
         // The diagnostic tripwire logged no membership violations.
